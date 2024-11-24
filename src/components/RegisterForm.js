@@ -1,13 +1,17 @@
+// RegisterForm.js
 import React from 'react';
 import styles from '../styles';
+
 function RegisterForm({
                           newUsername,
+                          email,
                           nickname,
                           newPassword,
                           confirmPassword,
                           captcha,
                           captchaInput,
                           onUsernameChange,
+                          onEmailChange,
                           onNicknameChange,
                           onPasswordChange,
                           onConfirmPasswordChange,
@@ -25,6 +29,13 @@ function RegisterForm({
                 value={newUsername}
                 onChange={onUsernameChange}
                 placeholder="Username"
+                style={styles.input}
+            />
+            <input
+                type="text"
+                value={email}
+                onChange={onEmailChange}
+                placeholder="Email"
                 style={styles.input}
             />
             <input
