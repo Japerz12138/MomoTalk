@@ -7,7 +7,9 @@ import MessageInput from './components/MessageInput';
 import UserMenu from './components/UserMenu';
 import FriendList from './components/FriendList';
 import SearchAndAddFriend from './components/SearchAndAddFriend';
+import ChatContainer from "./components/ChatContainer";
 import FriendRequests from './components/FriendRequests';
+import Sidebar from './components/Sidebar';
 import './App.css';
 import styles from './styles';
 
@@ -51,6 +53,10 @@ function App() {
     useEffect(() => {
         generateCaptcha();
     }, []);
+
+    // Ignore ResizeObserver error Caused by LastPass
+    const observer = new ResizeObserver(() => null);
+    observer.observe(document.body);
 
 
     const fetchMessages = async () => {
@@ -334,52 +340,28 @@ function App() {
                 )
             ) : (
                 <>
-                    <div style={styles.header}>
-                        <h1>Chat</h1>
-                        <UserMenu
+                    <div className="d-flex">
+                        <Sidebar
                             showMenu={showMenu}
                             toggleMenu={toggleMenu}
                             onLogout={handleLogout}
                         />
-                    </div>
-                    <div style={styles.mainContent}>
-                        <div style={styles.friendListContainer}>
-                            <h2>Friends</h2>
-                            <FriendList
-                                friends={friends}
-                                onSelectFriend={handleSelectFriend}
-                                onRemoveFriend={handleRemoveFriend}
+                        <div className="flex-grow-1 d-flex flex-column">
+                            <div className="list-group list-group-flush border-bottom scrollarea">
+                                <FriendList friends={friends} onSelectFriend={handleSelectFriend}/>
+                            </div>
+                            <ChatContainer
+                                messages={messages}
+                                selectedFriend={selectedFriend}
+                            />
+                            <MessageInput
+                                input={input}
+                                onInputChange={(e) => setInput(e.target.value)}
+                                onSendMessage={handleSendDM}
                             />
                         </div>
-                        <div style={styles.chatContainer}>
-                            {selectedFriend ? (
-                                <>
-                                    <h2>Chat with {selectedFriend.nickname || selectedFriend.username}</h2>
-                                    <MessageList messages={dms}/>
-                                    <MessageInput
-                                        input={input}
-                                        onInputChange={(e) => setInput(e.target.value)}
-                                        onSendMessage={handleSendDM}
-                                    />
-                                    <button
-                                        onClick={handleDeleteDMs}
-                                        style={styles.deleteButton}
-                                    >
-                                        Delete Chat History
-                                    </button>
-                                </>
-                            ) : (
-                                <p>Select a friend to start chatting.</p>
-                            )}
-                        </div>
-                        <div style={styles.addFriendContainer}>
-                            <h2>Friend Requests</h2>
-                            <FriendRequests
-                                friendRequests={friendRequests}
-                                onRespond={respondToFriendRequest}
-                            />
-                            <h2>Search & Add Friends</h2>
-                            <SearchAndAddFriend token={token} onAddFriend={handleAddFriend}/>
+                        <div className="p-3">
+                            <FriendRequests friendRequests={friendRequests}/>
                         </div>
                     </div>
                 </>

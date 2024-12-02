@@ -1,17 +1,46 @@
 import React from 'react';
-import styles from '../styles';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 function UserMenu({ showMenu, toggleMenu, onLogout }) {
     return (
-        <div style={styles.avatarContainer} onClick={toggleMenu}>
-            <img src="https://via.placeholder.com/40" alt="Avatar" style={styles.avatar} />
-            {showMenu && (
-                <div style={styles.menu}>
-                    <p style={styles.menuItem} onClick={() => alert('Profile clicked')}>Profile</p>
-                    <p style={styles.menuItem} onClick={() => alert('Settings clicked')}>Settings</p>
-                    <p style={styles.menuItem} onClick={onLogout}>Logout</p>
-                </div>
-            )}
+        <div className="dropdown" onClick={toggleMenu} style={{ position: 'relative' }}>
+            <a
+                href="#"
+                className={`d-flex align-items-center justify-content-center p-3 text-decoration-none dropdown-toggle ${showMenu ? 'show' : ''}`}
+                data-bs-toggle="dropdown"
+                aria-expanded={showMenu}
+            >
+                <img
+                    src="https://via.placeholder.com/40" // 确保 URL 有效或替换为真实 URL
+                    alt="Avatar"
+                    width="40"
+                    height="40"
+                    className="rounded-circle"
+                />
+            </a>
+            <ul
+                className={`dropdown-menu text-small shadow gap-1 p-2 rounded-3 ${showMenu ? 'show' : ''}`}
+                style={{ display: showMenu ? 'block' : 'none', position: 'absolute', top: '100%', left: 0 }}
+            >
+                <li>
+                    <a className="dropdown-item rounded-2" href="#" onClick={() => alert('Profile clicked')}>
+                        Profile
+                    </a>
+                </li>
+                <li>
+                    <a className="dropdown-item rounded-2" href="#" onClick={() => alert('Settings clicked')}>
+                        Settings
+                    </a>
+                </li>
+                <li>
+                    <hr className="dropdown-divider" />
+                </li>
+                <li>
+                    <a className="dropdown-item rounded-2" href="#" onClick={onLogout}>
+                        Logout
+                    </a>
+                </li>
+            </ul>
         </div>
     );
 }

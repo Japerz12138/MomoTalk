@@ -1,19 +1,22 @@
 import React from 'react';
-import styles from '../styles';
 
-function MessageInput({ input, onInputChange, onSendMessage }) {
+const MessageInput = ({ input, onInputChange, onSendMessage }) => {
     return (
-        <form onSubmit={onSendMessage} style={styles.form}>
-            <input
-                type="text"
-                value={input}
-                onChange={onInputChange}
-                style={styles.input}
-                placeholder="Type a message..."
-            />
-            <button type="submit" style={styles.button}>Send</button>
-        </form>
+        <div className="chat-input">
+            <div className="input-group">
+                <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Type your message"
+                    value={input}
+                    onChange={onInputChange}
+                />
+                <button className="btn btn-primary" type="button" onClick={onSendMessage}>
+                    Send
+                </button>
+            </div>
+        </div>
     );
-}
+};
 
 export default MessageInput;
