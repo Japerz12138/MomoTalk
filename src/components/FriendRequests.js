@@ -1,30 +1,38 @@
 import React from 'react';
-import styles from '../styles';
 
 function FriendRequests({ friendRequests, onRespond }) {
     return (
-        <div style={styles.requestsContainer}>
-            <h3>Friend Requests</h3>
+        <div className="p-3 bg-light border rounded" style={{marginTop: '69px'}}>
+            <h3 className="mb-3">Friend Requests</h3>
             {friendRequests.length === 0 ? (
-                <p>No pending friend requests.</p>
+                <p className="text-muted">No pending friend requests.</p>
             ) : (
-                friendRequests.map(request => (
-                    <div key={request.id} style={styles.requestItem}>
-                        <p>{request.nickname || request.username}</p>
-                        <button
-                            style={styles.acceptButton}
-                            onClick={() => onRespond(request.id, 'accept')}
+                <div className="list-group">
+                    {friendRequests.map(request => (
+                        <div
+                            key={request.id}
+                            className="list-group-item d-flex justify-content-between align-items-center"
                         >
-                            Accept
-                        </button>
-                        <button
-                            style={styles.rejectButton}
-                            onClick={() => onRespond(request.id, 'reject')}
-                        >
-                            Reject
-                        </button>
-                    </div>
-                ))
+                            <div>
+                                <p className="mb-0 fw-bold">{request.nickname || request.username}</p>
+                            </div>
+                            <div>
+                                <button
+                                    className="btn btn-sm btn-success me-2"
+                                    onClick={() => onRespond(request.id, 'accept')}
+                                >
+                                    Accept
+                                </button>
+                                <button
+                                    className="btn btn-sm btn-danger"
+                                    onClick={() => onRespond(request.id, 'reject')}
+                                >
+                                    Reject
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     );

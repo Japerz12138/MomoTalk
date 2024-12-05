@@ -32,6 +32,7 @@ function App() {
     const [dms, setDms] = useState([]);
     const [showMenu, setShowMenu] = useState(false);
     const [error, setError] = useState('');
+    const [activeSection, setActiveSection] = useState('chat');
 
     useEffect(() => {
         const savedToken = localStorage.getItem('token');
@@ -339,30 +340,63 @@ function App() {
                 )
             ) : (
                 <>
-                    <div className="d-flex">
+                    <div style={{display: 'flex', height: '100vh'}}>
+
+
                         <Sidebar
-                            showMenu={showMenu}
-                            toggleMenu={toggleMenu}
+                            activeSection={activeSection}
+                            onSectionChange={(section) => setActiveSection(section)}
                             onLogout={handleLogout}
                         />
-                        <div className="flex-grow-1 d-flex flex-column">
-                            <div className="list-group list-group-flush border-bottom scrollarea">
+
+
+                        <div
+                            style={{
+                                width: '300px',
+                                backgroundColor: '#ffffff',
+                                overflowY: 'auto',
+                                flexShrink: 0,
+                            }}
+                        >
+                            {activeSection === 'chat' && (
+                                <MessageList messages={messages}/>
+                            )}
+                            {activeSection === 'friend-list' && (
+
                                 <FriendList friends={friends} onSelectFriend={handleSelectFriend}/>
-                            </div>
-                            <ChatContainer
-                                messages={messages}
-                                selectedFriend={selectedFriend}
-                            />
+                            )}
+                            {activeSection === 'add-friend' && (
+                                <>
+                                    <FriendRequests
+                                        friendRequests={friendRequests}
+                                        onRespond={() => {}}
+                                    />
+                                    <SearchAndAddFriend
+                                        token={token}
+                                        onAddFriend={() => {}}
+                                    />
+                                </>
+                            )}
+                        </div>
+
+
+                        <div
+                            style={{
+                                flex: 2,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                backgroundColor: '#fff',
+                            }}
+                        >
+                            <ChatContainer messages={messages}/>
                             <MessageInput
                                 input={input}
                                 onInputChange={(e) => setInput(e.target.value)}
                                 onSendMessage={handleSendDM}
                             />
                         </div>
-                        <div className="p-3">
-                            <FriendRequests friendRequests={friendRequests}/>
-                        </div>
                     </div>
+
                 </>
             )}
         </div>

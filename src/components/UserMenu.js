@@ -1,18 +1,25 @@
-import React from 'react';
+import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import '../styles';
 
-function UserMenu({ showMenu, toggleMenu, onLogout }) {
+function UserMenu({ onLogout }) {
+    const [showMenu, setShowMenu] = useState(false);
+
+    const toggleMenu = () => {
+        setShowMenu((prev) => !prev);
+    };
+
     return (
-        <div className="dropdown border-top" onClick={toggleMenu} style={{ position: 'relative' }}>
+        <div className="dropdown" style={{ position: 'relative' }}>
             <a
                 href="#"
-                className={`d-flex align-items-center justify-content-center p-3 text-decoration-none dropdown-toggle ${showMenu ? 'show' : ''}`}
+                className="d-flex align-items-center justify-content-center p-3 text-decoration-none dropdown-toggle"
                 data-bs-toggle="dropdown"
                 aria-expanded={showMenu}
+                onClick={toggleMenu}
+                style={{ cursor: 'pointer' }}
             >
                 <img
-                    src="https://via.placeholder.com/40"
+                    src="https://via.placeholder.com/40" // Still a placeholder for now
                     alt="Avatar"
                     width="40"
                     height="40"
@@ -21,7 +28,13 @@ function UserMenu({ showMenu, toggleMenu, onLogout }) {
             </a>
             <ul
                 className={`dropdown-menu text-small shadow gap-1 p-2 rounded-3 ${showMenu ? 'show' : ''}`}
-                style={{ display: showMenu ? 'block' : 'none', position: 'absolute', top: '100%', left: 0 }}
+                style={{
+                    display: showMenu ? 'block' : 'none',
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: '10px',
+                    zIndex: 1050,
+                }}
             >
                 <li>
                     <a className="dropdown-item rounded-2" href="#" onClick={() => alert('Profile clicked')}>

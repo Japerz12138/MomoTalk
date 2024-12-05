@@ -1,17 +1,17 @@
 import React from 'react';
-import styles from '../styles';
-import '../App.css';
 
 function MessageList({ messages }) {
     return (
-        <div style={styles.chatBox}>
+        <div className="list-group">
             {messages.map((msg) => (
-                <p key={msg.id} style={styles.message}>
-                    <strong>{msg.username}</strong>: {msg.text}
-                    <small>({new Date(msg.timestamp).toLocaleString()})</small>
-                </p>
+                <div key={msg.id} className="list-group-item">
+                    <div className="d-flex justify-content-between align-items-center">
+                        <strong>{msg.username}</strong>
+                        <small>{new Date(msg.timestamp).toLocaleString()}</small>
+                    </div>
+                    <p className="mb-0">{msg.text}</p>
+                </div>
             ))}
-            <p></p>
         </div>
     );
 }

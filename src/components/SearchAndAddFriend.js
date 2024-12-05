@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import styles from '../styles';
 
 function SearchAndAddFriend({ token, onAddFriend }) {
     const [query, setQuery] = useState('');
@@ -19,20 +18,36 @@ function SearchAndAddFriend({ token, onAddFriend }) {
     };
 
     return (
-        <div style={styles.searchContainer}>
-            <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by username"
-                style={styles.input}
-            />
-            <button onClick={handleSearch} style={styles.button}>Search</button>
-            <ul style={styles.searchResults}>
+        <div className="mb-4" style={{ marginTop: '69px'}} >
+            <div className="input-group mb-3">
+                <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Search by username"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                />
+                <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={handleSearch}
+                >
+                    Search
+                </button>
+            </div>
+            <ul className="list-group">
                 {searchResults.map(user => (
-                    <li key={user.id} style={styles.searchItem}>
+                    <li
+                        key={user.id}
+                        className="list-group-item d-flex justify-content-between align-items-center"
+                    >
                         {user.nickname || user.username}
-                        <button onClick={() => onAddFriend(user.username)} style={styles.addButton}>Add Friend</button>
+                        <button
+                            className="btn btn-sm btn-success"
+                            onClick={() => onAddFriend(user.username)}
+                        >
+                            Add Friend
+                        </button>
                     </li>
                 ))}
             </ul>

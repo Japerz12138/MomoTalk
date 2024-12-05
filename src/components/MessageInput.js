@@ -11,7 +11,16 @@ const MessageInput = ({ input, onInputChange, onSendMessage }) => {
                     value={input}
                     onChange={onInputChange}
                 />
-                <button className="btn btn-primary" type="button" onClick={onSendMessage}>
+                <button
+                    className="btn"
+                    type="button"
+                    onClick={onSendMessage}
+                    style={{
+                        backgroundColor: '#4C5B6F',
+                        border: 'none',
+                        color: 'white',
+                    }}
+                >
                     Send
                 </button>
             </div>
