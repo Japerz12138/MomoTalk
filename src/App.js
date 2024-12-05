@@ -304,7 +304,6 @@ function App() {
         setCaptcha(randomCaptcha);
     };
 
-
     return (
         <div style={styles.container}>
             {!token ? (

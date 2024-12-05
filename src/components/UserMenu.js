@@ -1,9 +1,10 @@
 import React from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import '../styles';
 
 function UserMenu({ showMenu, toggleMenu, onLogout }) {
     return (
-        <div className="dropdown" onClick={toggleMenu} style={{ position: 'relative' }}>
+        <div className="dropdown border-top" onClick={toggleMenu} style={{ position: 'relative' }}>
             <a
                 href="#"
                 className={`d-flex align-items-center justify-content-center p-3 text-decoration-none dropdown-toggle ${showMenu ? 'show' : ''}`}
@@ -11,7 +12,7 @@ function UserMenu({ showMenu, toggleMenu, onLogout }) {
                 aria-expanded={showMenu}
             >
                 <img
-                    src="https://via.placeholder.com/40" // 确保 URL 有效或替换为真实 URL
+                    src="https://via.placeholder.com/40"
                     alt="Avatar"
                     width="40"
                     height="40"
