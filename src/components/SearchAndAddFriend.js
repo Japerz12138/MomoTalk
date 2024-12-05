@@ -31,6 +31,11 @@ function SearchAndAddFriend({ token, onAddFriend }) {
                     className="btn btn-primary"
                     type="button"
                     onClick={handleSearch}
+                    style={{
+                        backgroundColor: '#4C5B6F',
+                        border: 'none',
+                        color: 'white',
+                    }}
                 >
                     Search
                 </button>

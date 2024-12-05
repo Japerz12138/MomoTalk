@@ -1,6 +1,13 @@
 import React from 'react';
 
 const MessageInput = ({ input, onInputChange, onSendMessage }) => {
+
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && onSendMessage) {
+            onSendMessage(e);
+        }
+    };
+
     return (
         <div className="chat-input">
             <div className="input-group">
@@ -10,6 +17,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage }) => {
                     placeholder="Type your message"
                     value={input}
                     onChange={onInputChange}
+                    onKeyDown={handleKeyPress}
                 />
                 <button
                     className="btn"
@@ -20,6 +28,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage }) => {
                         border: 'none',
                         color: 'white',
                     }}
+                    disabled={!onSendMessage}
                 >
                     Send
                 </button>

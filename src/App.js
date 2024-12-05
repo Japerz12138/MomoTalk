@@ -4,7 +4,6 @@ import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
-import UserMenu from './components/UserMenu';
 import FriendList from './components/FriendList';
 import SearchAndAddFriend from './components/SearchAndAddFriend';
 import ChatContainer from "./components/ChatContainer";
@@ -12,6 +11,10 @@ import FriendRequests from './components/FriendRequests';
 import Sidebar from './components/Sidebar';
 import './App.css';
 import styles from './styles';
+
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:5000');
 
 function App() {
     const [messages, setMessages] = useState([]);
@@ -33,23 +36,62 @@ function App() {
     const [showMenu, setShowMenu] = useState(false);
     const [error, setError] = useState('');
     const [activeSection, setActiveSection] = useState('chat');
+    const [selectedChat, setSelectedChat] = useState(null);
+    const [userId, setUserId] = useState(null);
 
     useEffect(() => {
         const savedToken = localStorage.getItem('token');
-        if (savedToken) {
-            setToken(savedToken);
-        }
+        const savedUsername = localStorage.getItem('username');
+        const savedNickname = localStorage.getItem('nickname');
+        const savedUserId = localStorage.getItem('userId');
+        // console.log('Loaded userId from localStorage:', savedUserId);
+        // FOR DEBUG!
+
+        if (savedToken) setToken(savedToken);
+        if (savedUsername) setUsername(savedUsername);
+        if (savedNickname) setNickname(savedNickname);
+        if (savedUserId) setUserId(parseInt(savedUserId, 10));
     }, []);
 
     useEffect(() => {
         if (token) {
-            fetchMessages();
             fetchFriends();
             fetchFriendRequests();
-            const interval = setInterval(fetchMessages, 1000); // 定期刷新消息
-            return () => clearInterval(interval); // 清理定时器
         }
-    }, [token]);
+        if (token && username) {
+
+            fetchFriends();
+            fetchFriendRequests();
+
+            socket.emit('join_room', username);
+
+            socket.on('receive_message', (message) => {
+                setDms((prevDms) => [...prevDms, message]);
+            });
+
+            return () => {
+                socket.off('receive_message');
+                socket.disconnect();
+            };
+
+        }
+    }, [token, username]);
+
+    useEffect(() => {
+        if (userId) {
+            socket.emit('join_room', userId);
+
+            socket.on('receive_message', (message) => {
+                if (message.senderId === selectedFriend?.id || message.receiverId === selectedFriend?.id) {
+                    setDms((prevDms) => [...prevDms, message]);
+                }
+            });
+
+            return () => {
+                socket.off('receive_message');
+            };
+        }
+    }, [userId, selectedFriend]);
 
     useEffect(() => {
         generateCaptcha();
@@ -59,10 +101,11 @@ function App() {
     const observer = new ResizeObserver(() => null);
     observer.observe(document.body);
 
-
     const fetchMessages = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/messages');
+            const response = await axios.get('http://localhost:5000/messages', {
+                headers: { Authorization: token },
+            });
             setMessages(response.data);
         } catch (error) {
             console.error('Error fetching messages:', error);
@@ -80,14 +123,21 @@ function App() {
         }
     };
 
-
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
             const response = await axios.post('http://localhost:5000/login', { username, password });
-            setToken(response.data.token);
-            localStorage.setItem('token', response.data.token);
-            setUsername(''); //Clear the error messages
+            const { token, username: loggedInUsername, nickname: loggedInNickname, userId: loggedInUserId } = response.data;
+
+            setToken(token);
+            setUsername(loggedInUsername);
+            setNickname(loggedInNickname);
+            setUserId(loggedInUserId);
+
+            localStorage.setItem('token', token);
+            localStorage.setItem('username', loggedInUsername);
+            localStorage.setItem('nickname', loggedInNickname);
+            localStorage.setItem('userId', loggedInUserId);
         } catch (error) {
             setError('Invalid username or password.');
             console.error('Login error:', error.response ? error.response.data : error);
@@ -182,8 +232,6 @@ function App() {
         }
     };
 
-
-
     const handleRemoveFriend = async (friendId) => {
         try {
             await axios.post('http://localhost:5000/friend/remove', { friendId }, {
@@ -195,19 +243,24 @@ function App() {
         }
     };
 
-    const handleSelectFriend = async (friend, page = 1, limit = 20) => {
+    const handleSelectFriend = async (friend) => {
         setSelectedFriend(friend);
         try {
             const response = await axios.get(`http://localhost:5000/dm/${friend.id}`, {
                 headers: { Authorization: token },
-                params: { page, limit },
             });
-            setDms(response.data);
+
+            // Fix the problem that all bubbles moved to left
+            const messagesWithSelf = response.data.map((message) => ({
+                ...message,
+                self: message.senderId === userId,
+            }));
+
+            setDms(messagesWithSelf);
         } catch (error) {
             console.error('Error fetching DMs:', error);
         }
     };
-
 
     const sendMessage = async (e) => {
         e.preventDefault();
@@ -226,20 +279,23 @@ function App() {
         }
     };
 
-    const handleSendDM = async (e) => {
+    const handleSendDM = (e) => {
         e.preventDefault();
-        if (input.trim() && token && selectedFriend) {
-            try {
-                await axios.post(
-                    'http://localhost:5000/dm/send',
-                    { receiverId: selectedFriend.id, text: input },
-                    { headers: { Authorization: token } }
-                );
-                setInput('');
-                handleSelectFriend(selectedFriend);
-            } catch (error) {
-                console.error('Error sending DM:', error);
-            }
+        if (input.trim() && selectedFriend) {
+            const newMessage = {
+                senderId: userId,
+                receiverId: selectedFriend.id,
+                text: input,
+                timestamp: new Date().toISOString(),
+            };
+
+            console.log('Sending message:', newMessage);
+
+            socket.emit('send_message', newMessage);
+
+            setDms((prevDms) => [...prevDms, { ...newMessage, self: true }]);
+
+            setInput('');
         }
     };
 
@@ -269,8 +325,10 @@ function App() {
         setFriendRequests([]);
         setShowMenu(false);
         localStorage.removeItem('token');
+        localStorage.removeItem('username');
+        localStorage.removeItem('nickname');
+        localStorage.removeItem('userId');
     };
-
 
     const toggleMenu = () => {
         setShowMenu((prev) => !prev);
@@ -342,11 +400,12 @@ function App() {
                 <>
                     <div style={{display: 'flex', height: '100vh'}}>
 
-
                         <Sidebar
                             activeSection={activeSection}
                             onSectionChange={(section) => setActiveSection(section)}
                             onLogout={handleLogout}
+                            nickname={nickname}
+                            username={username}
                         />
 
 
@@ -359,11 +418,23 @@ function App() {
                             }}
                         >
                             {activeSection === 'chat' && (
-                                <MessageList messages={messages}/>
+                                <MessageList
+                                    messages={messages}
+                                    onSelectMessage={(message) => {
+                                        setSelectedChat(message.username);
+                                        handleSelectFriend({ id: message.userId, username: message.username });
+                                    }}
+                                />
                             )}
                             {activeSection === 'friend-list' && (
 
-                                <FriendList friends={friends} onSelectFriend={handleSelectFriend}/>
+                                <FriendList
+                                    friends={friends}
+                                    onSelectFriend={(friend) => {
+                                        handleSelectFriend(friend);
+                                    }}
+                                />
+
                             )}
                             {activeSection === 'add-friend' && (
                                 <>
@@ -388,11 +459,14 @@ function App() {
                                 backgroundColor: '#fff',
                             }}
                         >
-                            <ChatContainer messages={messages}/>
+                            <ChatContainer
+                                messages={selectedFriend ? dms : []}
+                                currentChat={selectedFriend ? selectedFriend.username : 'Select a conversation'}
+                            />
                             <MessageInput
                                 input={input}
                                 onInputChange={(e) => setInput(e.target.value)}
-                                onSendMessage={handleSendDM}
+                                onSendMessage={selectedFriend ? handleSendDM : null}
                             />
                         </div>
                     </div>

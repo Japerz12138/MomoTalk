@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-function UserMenu({ onLogout }) {
+function UserMenu({ onLogout, nickname, username}) {
     const [showMenu, setShowMenu] = useState(false);
 
     const toggleMenu = () => {
@@ -36,6 +36,10 @@ function UserMenu({ onLogout }) {
                     zIndex: 1050,
                 }}
             >
+                <div className="px-3 py-2">
+                    <strong className="d-block" style={{fontSize: '1rem'}}>{nickname}</strong>
+                    <span className="text-muted" style={{fontSize:'0.9rem'}}>@{username}</span>
+                </div>
                 <li>
                     <a className="dropdown-item rounded-2" href="#" onClick={() => alert('Profile clicked')}>
                         Profile
@@ -47,10 +51,10 @@ function UserMenu({ onLogout }) {
                     </a>
                 </li>
                 <li>
-                    <hr className="dropdown-divider" />
+                    <hr className="dropdown-divider"/>
                 </li>
                 <li>
-                    <a className="dropdown-item rounded-2" href="#" onClick={onLogout}>
+                    <a className="dropdown-item rounded-2 logout" href="#" onClick={onLogout}>
                         Logout
                     </a>
                 </li>

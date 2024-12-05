@@ -1,12 +1,14 @@
+require('dotenv').config();
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const http = require('http');
+const { Server } = require('socket.io');
 
-require('dotenv').config();
-
+// Init Express
 const app = express();
 const PORT = 5000;
 const SECRET_KEY = process.env.SECRET_KEY;
@@ -30,6 +32,47 @@ db.connect((err) => {
     console.log('Connected to MySQL');
 });
 
+// Socket.io Instance
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: '*',
+    },
+});
+
+io.on('connection', (socket) => {
+    socket.on('join_room', (userId) => {
+        if (userId) {
+            socket.join(userId.toString());
+            console.log(`User ${userId} joined room`);
+        }
+    });
+
+    socket.on('send_message', (data) => {
+        const { senderId, receiverId, text } = data;
+
+        if (!senderId || !receiverId || !text) {
+            console.error('Invalid message payload:', data);
+            return;
+        }
+
+        const query = 'INSERT INTO dms (sender_id, receiver_id, text, timestamp) VALUES (?, ?, ?, NOW())';
+        db.query(query, [senderId, receiverId, text], (err) => {
+            if (!err) {
+                io.to(receiverId.toString()).emit('receive_message', {
+                    senderId,
+                    receiverId,
+                    text,
+                    timestamp: new Date(),
+                });
+            } else {
+                console.error('Error saving message:', err.message);
+            }
+        });
+    });
+});
+
+// ROUTERS
 app.post('/register', async (req, res) => {
     const { username, email, password, nickname } = req.body;
 
@@ -70,7 +113,12 @@ app.post('/login', (req, res) => {
         }
 
         const token = jwt.sign({ userId: user.id, username: user.username }, SECRET_KEY, { expiresIn: '1h' });
-        res.json({ token });
+        res.json({
+            token,
+            userId: user.id,
+            username: user.username,
+            nickname: user.nickname
+        });
     });
 });
 
@@ -79,14 +127,16 @@ function authenticateToken(req, res, next) {
     if (!token) return res.status(401).json({ error: 'No token provided' });
 
     jwt.verify(token, SECRET_KEY, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Invalid or expired token' });
+        if (err) {
+            console.error('JWT Verification Error:', err.message);
+            return res.status(403).json({ error: 'Invalid or expired token' });
+        }
         req.user = user;
         next();
     });
 }
 
-
-// Messages - POST
+// POST
 app.post('/messages', authenticateToken, (req, res) => {
     const { text } = req.body;
     const query = 'INSERT INTO messages (user_id, text, timestamp) VALUES (?, ?, NOW())';
@@ -114,7 +164,6 @@ app.get('/messages', authenticateToken, (req, res) => {
         res.json(results);
     });
 });
-
 
 app.get('/friends', authenticateToken, (req, res) => {
     const userId = req.user.userId;
@@ -176,7 +225,6 @@ app.post('/friend/accept', authenticateToken, (req, res) => {
         db.query(acceptFriendQuery, [friendId, userId], (err) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            // 插入反向关系
             const reverseFriendQuery = `
                 INSERT INTO friends (user_id, friend_id, status)
                 VALUES (?, ?, "accepted")
@@ -206,6 +254,7 @@ app.get('/friend/requests', authenticateToken, (req, res) => {
     });
 });
 
+//TODO: THIS FUNCTION NEEDS FIX! GEZZ!
 app.post('/friend/respond', authenticateToken, (req, res) => {
     const { requestId, action } = req.body; // action: "accept" or "reject"
     const userId = req.user.userId;
@@ -269,18 +318,21 @@ app.get('/dm/:friendId', authenticateToken, (req, res) => {
     const userId = req.user.userId;
 
     const getDMQuery = `
-        SELECT dms.id, dms.text, dms.timestamp, users.nickname AS username
+        SELECT dms.id, dms.text, dms.timestamp,
+               dms.sender_id AS senderId, dms.receiver_id AS receiverId,
+               (dms.sender_id = ?) AS self -- Calculate for self directly so front-end don't have to do it
         FROM dms
-        JOIN users ON dms.sender_id = users.id
-        WHERE (dms.sender_id = ? AND dms.receiver_id = ?) OR (dms.sender_id = ? AND dms.receiver_id = ?)
+        WHERE (dms.sender_id = ? AND dms.receiver_id = ?)
+           OR (dms.sender_id = ? AND dms.receiver_id = ?)
         ORDER BY dms.timestamp ASC
     `;
 
-    db.query(getDMQuery, [userId, friendId, friendId, userId], (err, results) => {
+    db.query(getDMQuery, [userId, userId, friendId, friendId, userId], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(results);
     });
 });
+
 
 app.get('/users/search', authenticateToken, (req, res) => {
     const { query } = req.query;
@@ -322,7 +374,7 @@ const cleanExpiredRequests = () => {
 
 setInterval(cleanExpiredRequests, 24 * 60 * 60 * 1000);
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 
     console.log('Initializing cleanup for expired friend requests...');
