@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 
 const ChatContainer = ({ messages, currentChat }) => {
     const chatEndRef = useRef(null);
+    const DEFAULT_AVATAR = "https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg";
 
     const scrollToBottom = () => {
         if (chatEndRef.current) {
@@ -14,8 +15,11 @@ const ChatContainer = ({ messages, currentChat }) => {
     }, [messages]);
 
     return (
-        <div className="chat-container p-3" style={{ marginTop: '69px', overflowY: 'auto', height: 'calc(100vh - 150px)' }}>
-            <h5 className="text-center text-muted mb-3">{currentChat || 'Select a conversation'}</h5>
+        <div
+            className="chat-container p-3"
+            style={{ marginTop: '69px', overflowY: 'auto', height: 'calc(100vh - 150px)' }}
+        >
+            <h5 className="text-center text-muted mb-3">{'Chat with @' + currentChat || 'Select a conversation'}</h5>
             {messages.length > 0 ? (
                 messages.map((message, index) => (
                     <div
@@ -24,8 +28,8 @@ const ChatContainer = ({ messages, currentChat }) => {
                     >
                         {!message.self && (
                             <img
-                                src={message.avatar || "https://via.placeholder.com/32"}
-                                alt={message.nickname}
+                                src={message.avatar || DEFAULT_AVATAR}
+                                alt="avatar"
                                 width="32"
                                 height="32"
                                 className="rounded-circle me-2"
@@ -37,8 +41,12 @@ const ChatContainer = ({ messages, currentChat }) => {
                     </div>
                 ))
             ) : (
-                <div className="text-muted text-center">No messages yet.</div>
+                <div className="text-center d-flex flex-column align-items-center">
+                    <i className="bi bi-chat-left-heart mb-3" style={{fontSize: '3rem', color: '#6c757d'}}></i>
+                    <div className="text-muted">No messages yet. Maybe start with a "Hi"?</div>
+                </div>
             )}
+
             <div ref={chatEndRef}></div>
         </div>
     );

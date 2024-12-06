@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 const FriendList = ({ friends, onSelectFriend }) => {
     const [selectedFriendId, setSelectedFriendId] = useState(null);
+    const DEFAULT_AVATAR = "https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg";
 
     const handleSelectFriend = (friend) => {
         setSelectedFriendId(friend.id);
@@ -20,7 +21,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
                     onClick={() => handleSelectFriend(friend)}
                 >
                     <img
-                        src={friend.avatar || 'https://via.placeholder.com/32'}
+                        src={friend.avatar || DEFAULT_AVATAR}
                         alt={friend.nickname || friend.username}
                         className="rounded-circle me-2"
                         style={{ width: '32px', height: '32px' }}

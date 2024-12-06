@@ -10,6 +10,7 @@ import ChatContainer from "./components/ChatContainer";
 import FriendRequests from './components/FriendRequests';
 import Sidebar from './components/Sidebar';
 import ToastContainer from "./components/ToastContainer";
+import UserProfile from "./components/UserProfile";
 import './App.css';
 import styles from './styles';
 
@@ -97,9 +98,13 @@ function App() {
             socket.emit('join_room', userId);
 
             socket.on('receive_message', (message) => {
-                if (message.senderId === selectedFriend?.id || message.receiverId === selectedFriend?.id) {
-                    setDms((prevDms) => [...prevDms, message]);
-                }
+                setDms((prevDms) => [
+                    ...prevDms,
+                    {
+                        ...message,
+                        avatar: selectedFriend?.avatar || "https://via.placeholder.com/32",
+                    },
+                ]);
             });
 
             return () => {
@@ -342,17 +347,19 @@ function App() {
                 headers: { Authorization: token },
             });
 
-            const messagesWithSelf = response.data.map((message) => ({
+            const messagesWithAvatar = response.data.map((message) => ({
                 ...message,
                 self: message.senderId === userId,
+                avatar: message.senderId === userId ? 'https://via.placeholder.com/100' : friend.avatar,
             }));
 
-            setDms(messagesWithSelf);
+            setDms(messagesWithAvatar);
         } catch (error) {
             console.error('Error fetching DMs:', error);
             handleShowToast('Error', 'Failed to load conversation.');
         }
     };
+
 
 
     const sendMessage = async (e) => {
@@ -380,13 +387,14 @@ function App() {
                 receiverId: selectedFriend.id,
                 text: input,
                 timestamp: new Date().toISOString(),
+                avatar: nickname,
             };
 
             console.log('Sending message:', newMessage); //for debug
 
             socket.emit('send_message', newMessage);
 
-            setDms((prevDms) => [...prevDms, { ...newMessage, self: true }]);
+            setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
 
             setInput('');
         }
@@ -522,7 +530,6 @@ function App() {
             ) : (
                 <>
                     <div style={{display: 'flex', height: '100vh'}}>
-
                         <Sidebar
                             activeSection={activeSection}
                             onSectionChange={handleSectionChange}
@@ -530,8 +537,6 @@ function App() {
                             nickname={nickname}
                             username={username}
                         />
-
-
 
                         <div
                             style={{
@@ -542,23 +547,20 @@ function App() {
                             }}
                         >
                             {activeSection === 'chat' && (
-                                <MessageList
-                                    messages={messages}
-                                    onSelectMessage={(message) => {
-                                        setSelectedChat(message.username);
-                                        handleSelectFriend({ id: message.userId, username: message.username });
-                                    }}
-                                />
-                            )}
-                            {activeSection === 'friend-list' && (
-
                                 <FriendList
                                     friends={friends}
                                     onSelectFriend={(friend) => {
                                         handleSelectFriend(friend);
                                     }}
                                 />
-
+                            )}
+                            {activeSection === 'friend-list' && (
+                                <FriendList
+                                    friends={friends}
+                                    onSelectFriend={(friend) => {
+                                        setSelectedFriend(friend);
+                                    }}
+                                />
                             )}
                             {activeSection === 'add-friend' && (
                                 <>
@@ -566,14 +568,10 @@ function App() {
                                         friendRequests={friendRequests}
                                         onRespond={respondToFriendRequest}
                                     />
-                                    <SearchAndAddFriend
-                                        token={token}
-                                        onAddFriend={handleAddFriend}
-                                    />
+                                    <SearchAndAddFriend token={token} onAddFriend={handleAddFriend}/>
                                 </>
                             )}
                         </div>
-
 
                         <div
                             style={{
@@ -583,17 +581,50 @@ function App() {
                                 backgroundColor: '#fff',
                             }}
                         >
-                            <ChatContainer
-                                messages={selectedFriend ? dms : []}
-                                currentChat={selectedFriend ? selectedFriend.username : 'Select a conversation'}
-                            />
-                            <MessageInput
-                                input={input}
-                                onInputChange={(e) => setInput(e.target.value)}
-                                onSendMessage={selectedFriend ? handleSendDM : null}
-                            />
+                            {activeSection === 'chat' && selectedFriend && (
+                                <>
+                                    <ChatContainer
+                                        messages={selectedFriend ? dms : []}
+                                        currentChat={selectedFriend ? selectedFriend.username : 'Select a conversation'}
+                                    />
+                                    <MessageInput
+                                        input={input}
+                                        onInputChange={(e) => setInput(e.target.value)}
+                                        onSendMessage={selectedFriend ? handleSendDM : null}
+                                    />
+                                </>
+                            )}
+                            {activeSection === 'friend-list' && selectedFriend && (
+                                <UserProfile
+                                    user={selectedFriend}
+                                    isOwnProfile={false}
+                                    onSendMessage={() => {
+                                        setActiveSection('chat');
+                                        handleSelectFriend(selectedFriend);
+                                    }}
+                                    onRemoveFriend={() => {
+                                        handleRemoveFriend(selectedFriend.id);
+                                        setSelectedFriend(null);
+                                    }}
+                                />
+                            )}
+                            {activeSection === 'profile' && (
+                                <UserProfile
+                                    user={selectedFriend}
+                                    isOwnProfile={false}
+                                    onSendMessage={() => {
+                                        setActiveSection('chat');
+                                        handleSelectFriend(selectedFriend);
+                                    }}
+                                    onRemoveFriend={() => {
+                                        handleRemoveFriend(selectedFriend.id);
+                                        setSelectedFriend(null);
+                                    }}
+                                />
+                            )}
                         </div>
                     </div>
+
 
                 </>
             )}

@@ -186,7 +186,7 @@ app.get('/messages', authenticateToken, (req, res) => {
     const query = `
         SELECT messages.id, messages.text, messages.timestamp, users.nickname AS username
         FROM messages
-        JOIN users ON messages.user_id = users.id
+                 JOIN users ON messages.user_id = users.id
         ORDER BY messages.timestamp ASC
         LIMIT ? OFFSET ?
     `;
@@ -231,7 +231,7 @@ app.post('/friend/add', authenticateToken, (req, res) => {
         const friendId = results[0].id;
 
         const checkFriendshipQuery = `
-            SELECT * FROM friends 
+            SELECT * FROM friends
             WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
         `;
         db.query(checkFriendshipQuery, [userId, friendId, friendId, userId], (err, results) => {
@@ -280,7 +280,7 @@ app.get('/friend/requests', authenticateToken, (req, res) => {
     const query = `
         SELECT f.id, u.username, u.nickname
         FROM friends f
-        JOIN users u ON f.user_id = u.id
+                 JOIN users u ON f.user_id = u.id
         WHERE f.friend_id = ? AND f.status = 'pending'
     `;
 
@@ -322,10 +322,53 @@ app.post('/friend/remove', authenticateToken, (req, res) => {
     const { friendId } = req.body;
     const userId = req.user.userId;
 
-    const deleteFriendQuery = 'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)';
-    db.query(deleteFriendQuery, [userId, friendId, friendId, userId], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Friend removed' });
+    const deleteFriendQuery = `
+        DELETE FROM friends 
+        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+    `;
+
+    const deleteDMQuery = `
+        DELETE FROM dms 
+        WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+    `;
+
+    // Friend Deletion Sequence
+    db.beginTransaction((transactionErr) => {
+        if (transactionErr) {
+            console.error('Transaction start error:', transactionErr.message);
+            return res.status(500).json({ error: 'Internal server error.' });
+        }
+
+        //Delete friend
+        db.query(deleteFriendQuery, [userId, friendId, friendId, userId], (friendErr) => {
+            if (friendErr) {
+                return db.rollback(() => {
+                    console.error('Error deleting friend:', friendErr.message);
+                    return res.status(500).json({ error: 'Failed to remove friend.' });
+                });
+            }
+
+            //Delete Chat
+            db.query(deleteDMQuery, [userId, friendId, friendId, userId], (dmErr) => {
+                if (dmErr) {
+                    return db.rollback(() => {
+                        console.error('Error deleting DMs:', dmErr.message);
+                        return res.status(500).json({ error: 'Failed to remove DMs.' });
+                    });
+                }
+
+                db.commit((commitErr) => {
+                    if (commitErr) {
+                        return db.rollback(() => {
+                            console.error('Transaction commit error:', commitErr.message);
+                            return res.status(500).json({ error: 'Failed to complete transaction.' });
+                        });
+                    }
+
+                    res.json({ message: 'Friend and DMs removed successfully.' });
+                });
+            });
+        });
     });
 });
 
@@ -386,7 +429,7 @@ app.post('/dm/delete', authenticateToken, (req, res) => {
 //Clean Friend Request!
 const cleanExpiredRequests = () => {
     const deleteQuery = `
-        DELETE FROM friends 
+        DELETE FROM friends
         WHERE status = 'pending' AND TIMESTAMPDIFF(DAY, created_at, NOW()) > 30
     `;
 
