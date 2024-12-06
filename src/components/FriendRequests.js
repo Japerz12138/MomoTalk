@@ -2,8 +2,7 @@ import React from 'react';
 
 function FriendRequests({ friendRequests, onRespond }) {
     return (
-        <div className="p-3 bg-light border rounded" style={{marginTop: '69px'}}>
-            <h3 className="mb-3">Friend Requests</h3>
+        <div className="p-3 bg-light border rounded" style={{ marginTop: '69px' }}>
             {friendRequests.length === 0 ? (
                 <p className="text-muted">No pending friend requests.</p>
             ) : (
@@ -16,18 +15,22 @@ function FriendRequests({ friendRequests, onRespond }) {
                             <div>
                                 <p className="mb-0 fw-bold">{request.nickname || request.username}</p>
                             </div>
-                            <div>
+                            <div className="btn-group" role="group" aria-label="Friend request actions">
                                 <button
-                                    className="btn btn-sm btn-success me-2"
+                                    type="button"
+                                    className="btn btn-success"
                                     onClick={() => onRespond(request.id, 'accept')}
+                                    title="Accept Friend Request"
                                 >
-                                    Accept
+                                    <i className="bi bi-check-circle"></i>
                                 </button>
                                 <button
-                                    className="btn btn-sm btn-danger"
+                                    type="button"
+                                    className="btn btn-danger"
                                     onClick={() => onRespond(request.id, 'reject')}
+                                    title="Reject Friend Request"
                                 >
-                                    Reject
+                                    <i className="bi bi-x-circle"></i>
                                 </button>
                             </div>
                         </div>

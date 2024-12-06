@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
@@ -9,6 +9,7 @@ import SearchAndAddFriend from './components/SearchAndAddFriend';
 import ChatContainer from "./components/ChatContainer";
 import FriendRequests from './components/FriendRequests';
 import Sidebar from './components/Sidebar';
+import ToastContainer from "./components/ToastContainer";
 import './App.css';
 import styles from './styles';
 
@@ -38,6 +39,8 @@ function App() {
     const [activeSection, setActiveSection] = useState('chat');
     const [selectedChat, setSelectedChat] = useState(null);
     const [userId, setUserId] = useState(null);
+    const toastRef = useRef();
+    const [socketInstance, setSocket] = useState(null);
 
     useEffect(() => {
         const savedToken = localStorage.getItem('token');
@@ -46,8 +49,11 @@ function App() {
         const savedUserId = localStorage.getItem('userId');
         // console.log('Loaded userId from localStorage:', savedUserId);
         // FOR DEBUG!
+        if (savedToken) {
+            setToken(savedToken);
+            axios.defaults.headers.common['Authorization'] = savedToken;
+        }
 
-        if (savedToken) setToken(savedToken);
         if (savedUsername) setUsername(savedUsername);
         if (savedNickname) setNickname(savedNickname);
         if (savedUserId) setUserId(parseInt(savedUserId, 10));
@@ -57,23 +63,32 @@ function App() {
         if (token) {
             fetchFriends();
             fetchFriendRequests();
+            if (userId) {
+                socket.emit('join_room', userId);
+                console.log(`Socket connected for userId: ${userId}`);
+            }
         }
+    }, [token, userId]);
+
+    useEffect(() => {
         if (token && username) {
-
-            fetchFriends();
-            fetchFriendRequests();
-
             socket.emit('join_room', username);
+            console.log(`Joined room for user: ${username}`);
 
             socket.on('receive_message', (message) => {
+                console.log('Received message:', message);
                 setDms((prevDms) => [...prevDms, message]);
+            });
+
+            socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
+                fetchFriendRequests();
+                fetchFriends();
             });
 
             return () => {
                 socket.off('receive_message');
-                socket.disconnect();
+                socket.off('receive_friend_request');
             };
-
         }
     }, [token, username]);
 
@@ -94,6 +109,46 @@ function App() {
     }, [userId, selectedFriend]);
 
     useEffect(() => {
+        socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
+            handleShowToast("New Friend!?", `${senderUsername} sent you a friend request!`);
+            fetchFriendRequests();
+            fetchFriends();
+        });
+
+        return () => {
+            socket.off('receive_friend_request');
+        };
+    }, []);
+
+    useEffect(() => {
+        socket.on('friend_request_responded', ({ receiverId, action }) => {
+            if (action === 'accept') {
+                handleShowToast("Yay!", "Your friend request was accepted!");
+                fetchFriends();
+            } else if (action === 'reject') {
+                handleShowToast(":(", "Your friend request was rejected!");
+            }
+        });
+
+        return () => {
+            socket.off('friend_request_responded');
+        };
+    }, []);
+
+    useEffect(() => {
+        if (socketInstance) {
+            socketInstance.on('update_friend_list', () => {
+                console.log('Received update_friend_list event');
+                fetchFriends();
+            });
+
+            return () => {
+                socketInstance.off('update_friend_list');
+            };
+        }
+    }, [socketInstance]);
+
+    useEffect(() => {
         generateCaptcha();
     }, []);
 
@@ -112,14 +167,21 @@ function App() {
         }
     };
 
+    const handleShowToast = (title, message) => {
+        toastRef.current.addToast(title, message);
+    };
+
     const fetchFriends = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/friends', {
-                headers: { Authorization: token },
-            });
+            const response = await axios.get('http://localhost:5000/friends');
             setFriends(response.data);
         } catch (error) {
-            console.error('Error fetching friends:', error);
+            if (error.response?.status === 401) {
+                console.error('Unauthorized! Clearing token.');
+                handleLogout();
+            } else {
+                console.error('Error fetching friends:', error);
+            }
         }
     };
 
@@ -138,11 +200,17 @@ function App() {
             localStorage.setItem('username', loggedInUsername);
             localStorage.setItem('nickname', loggedInNickname);
             localStorage.setItem('userId', loggedInUserId);
+
+            //init socket for current user
+            const newSocket = initializeSocket(loggedInUserId);
+            setSocket(newSocket); // Save socket instance
         } catch (error) {
             setError('Invalid username or password.');
             console.error('Login error:', error.response ? error.response.data : error);
         }
     };
+
+
 
     const handleRegister = async (e) => {
         e.preventDefault();
@@ -180,16 +248,24 @@ function App() {
 
     const handleAddFriend = async (username) => {
         try {
-            await axios.post('http://localhost:5000/friend/add', { friendUsername: username }, {
+            const response = await axios.post('http://localhost:5000/friend/add', { friendUsername: username }, {
                 headers: { Authorization: token },
             });
-            alert('Friend request sent');
+
+            handleShowToast("Success", "Friend request sent!");
             fetchFriends();
+
+            // Notify the friend
+            const receiverId = response.data.receiverId;
+            socket.emit('send_friend_request', {
+                senderId: userId,
+                receiverId,
+                senderUsername: username,
+            });
         } catch (error) {
-            setError(error.response?.data?.error || 'Error adding friend');
+            console.error('Error adding friend:', error.response?.data?.error || error);
         }
     };
-
 
     const handleAcceptFriend = async (friendId) => {
         try {
@@ -207,28 +283,44 @@ function App() {
 
     const fetchFriendRequests = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/friend/requests', {
-                headers: { Authorization: token },
-            });
+            const response = await axios.get('http://localhost:5000/friend/requests');
             setFriendRequests(response.data);
         } catch (error) {
-            console.error('Error fetching friend requests:', error);
+            if (error.response?.status === 401) {
+                console.error('Unauthorized! Clearing token.');
+                handleLogout();
+            } else {
+                console.error('Error fetching friend requests:', error);
+            }
         }
     };
 
     const respondToFriendRequest = async (requestId, action) => {
         try {
-            await axios.post(
+            const response = await axios.post(
                 'http://localhost:5000/friend/respond',
                 { requestId, action },
                 { headers: { Authorization: token } }
             );
+
+            handleShowToast(
+                action === 'accept' ? 'Success' : 'Notification',
+                action === 'accept' ? 'Friend request accepted!' : 'Friend request rejected.'
+            );
+
+            fetchFriendRequests();
             if (action === 'accept') {
                 fetchFriends();
             }
-            fetchFriendRequests();
+
+            const senderId = response.data.senderId;
+            socket.emit('respond_friend_request', {
+                senderId,
+                receiverId: userId,
+                action,
+            });
         } catch (error) {
-            console.error(`Error responding to friend request: ${action}`, error);
+            handleShowToast("Error", "Failed to respond to friend request.");
         }
     };
 
@@ -244,13 +336,12 @@ function App() {
     };
 
     const handleSelectFriend = async (friend) => {
-        setSelectedFriend(friend);
         try {
+            setSelectedFriend(friend);
             const response = await axios.get(`http://localhost:5000/dm/${friend.id}`, {
                 headers: { Authorization: token },
             });
 
-            // Fix the problem that all bubbles moved to left
             const messagesWithSelf = response.data.map((message) => ({
                 ...message,
                 self: message.senderId === userId,
@@ -259,8 +350,10 @@ function App() {
             setDms(messagesWithSelf);
         } catch (error) {
             console.error('Error fetching DMs:', error);
+            handleShowToast('Error', 'Failed to load conversation.');
         }
     };
+
 
     const sendMessage = async (e) => {
         e.preventDefault();
@@ -289,7 +382,7 @@ function App() {
                 timestamp: new Date().toISOString(),
             };
 
-            console.log('Sending message:', newMessage);
+            console.log('Sending message:', newMessage); //for debug
 
             socket.emit('send_message', newMessage);
 
@@ -316,6 +409,13 @@ function App() {
     };
 
     const handleLogout = () => {
+        if (socketInstance) {
+            socketInstance.emit('leave_room', userId);
+            socketInstance.removeAllListeners();
+            socketInstance.disconnect();
+            setSocket(null);
+        }
+
         setToken(null);
         setUsername('');
         setPassword('');
@@ -329,6 +429,15 @@ function App() {
         localStorage.removeItem('nickname');
         localStorage.removeItem('userId');
     };
+
+    const initializeSocket = (userId) => {
+        const newSocket = io('http://localhost:5000');
+        newSocket.emit('join_room', userId);
+        console.log(`Socket initialized for userId: ${userId}`);
+        return newSocket;
+    };
+
+
 
     const toggleMenu = () => {
         setShowMenu((prev) => !prev);
@@ -363,8 +472,22 @@ function App() {
         setCaptcha(randomCaptcha);
     };
 
+    //IF ADD NAVIGATION ITEM, CHANGE THIS AS WELL!
+    const handleSectionChange = (section) => {
+        setActiveSection(section);
+
+        if (section === 'friend-list') {
+            fetchFriends();
+        } else if (section === 'add-friend') {
+            fetchFriendRequests();
+        } else if (section === 'chat') {
+            fetchMessages();
+        }
+    };
+
     return (
         <div style={styles.container}>
+            <ToastContainer ref={toastRef} />
             {!token ? (
                 showRegister ? (
                     <RegisterForm
@@ -402,11 +525,12 @@ function App() {
 
                         <Sidebar
                             activeSection={activeSection}
-                            onSectionChange={(section) => setActiveSection(section)}
+                            onSectionChange={handleSectionChange}
                             onLogout={handleLogout}
                             nickname={nickname}
                             username={username}
                         />
+
 
 
                         <div
@@ -440,11 +564,11 @@ function App() {
                                 <>
                                     <FriendRequests
                                         friendRequests={friendRequests}
-                                        onRespond={() => {}}
+                                        onRespond={respondToFriendRequest}
                                     />
                                     <SearchAndAddFriend
                                         token={token}
-                                        onAddFriend={() => {}}
+                                        onAddFriend={handleAddFriend}
                                     />
                                 </>
                             )}

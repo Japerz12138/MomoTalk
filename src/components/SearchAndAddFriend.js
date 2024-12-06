@@ -18,7 +18,7 @@ function SearchAndAddFriend({ token, onAddFriend }) {
     };
 
     return (
-        <div className="mb-4" style={{ marginTop: '69px'}} >
+        <div className="mb-4" style={{ marginTop: '10px', marginLeft: '5px', marginRight: '5px'}} >
             <div className="input-group mb-3">
                 <input
                     type="text"

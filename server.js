@@ -41,10 +41,19 @@ const io = new Server(server, {
 });
 
 io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
+
     socket.on('join_room', (userId) => {
         if (userId) {
             socket.join(userId.toString());
             console.log(`User ${userId} joined room`);
+        }
+    });
+
+    socket.on('leave_room', (userId) => {
+        if (userId) {
+            socket.leave(userId.toString());
+            console.log(`User ${userId} left room`);
         }
     });
 
@@ -70,7 +79,30 @@ io.on('connection', (socket) => {
             }
         });
     });
+
+    // Listen to Friend Request
+    socket.on('send_friend_request', ({ senderId, receiverId, senderUsername }) => {
+        console.log(`Friend request sent from ${senderId} to ${receiverId}`);
+        io.to(receiverId.toString()).emit('receive_friend_request', {
+            senderId,
+            senderUsername,
+        });
+    });
+
+    // Listen for response of the friend requests
+    socket.on('respond_friend_request', ({ senderId, receiverId, action }) => {
+        console.log(`Friend request ${action} by ${receiverId}`);
+        io.to(senderId.toString()).emit('friend_request_responded', { receiverId, action });
+        if (action === 'accept') {
+            io.to(senderId.toString()).emit('update_friend_list');
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
 });
+
 
 // ROUTERS
 app.post('/register', async (req, res) => {
@@ -198,19 +230,23 @@ app.post('/friend/add', authenticateToken, (req, res) => {
 
         const friendId = results[0].id;
 
-        const checkFriendshipQuery = 'SELECT * FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)';
+        const checkFriendshipQuery = `
+            SELECT * FROM friends 
+            WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+        `;
         db.query(checkFriendshipQuery, [userId, friendId, friendId, userId], (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
-            if (results.length > 0) return res.status(400).json({ error: 'Friendship already exists' });
+            if (results.length > 0) return res.status(400).json({ error: 'Friendship already exists or pending.' });
 
             const addFriendQuery = 'INSERT INTO friends (user_id, friend_id, status) VALUES (?, ?, "pending")';
             db.query(addFriendQuery, [userId, friendId], (err) => {
                 if (err) return res.status(500).json({ error: err.message });
-                res.json({ message: 'Friend request sent' });
+                res.json({ message: 'Friend request sent', receiverId: friendId }); //Return ReciverID
             });
         });
     });
 });
+
 
 app.post('/friend/accept', authenticateToken, (req, res) => {
     const { friendId } = req.body;
@@ -259,10 +295,6 @@ app.post('/friend/respond', authenticateToken, (req, res) => {
     const { requestId, action } = req.body; // action: "accept" or "reject"
     const userId = req.user.userId;
 
-    if (!['accept', 'reject'].includes(action)) {
-        return res.status(400).json({ error: 'Invalid action' });
-    }
-
     if (action === 'accept') {
         const acceptQuery = `
             UPDATE friends
@@ -271,10 +303,7 @@ app.post('/friend/respond', authenticateToken, (req, res) => {
         `;
         db.query(acceptQuery, [requestId, userId], (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
-            if (results.affectedRows === 0) {
-                return res.status(404).json({ error: 'Friend request not found or unauthorized' });
-            }
-            res.json({ message: 'Friend request accepted' });
+            res.json({ message: 'Friend request accepted', senderId: requestId });
         });
     } else if (action === 'reject') {
         const rejectQuery = `
@@ -283,13 +312,11 @@ app.post('/friend/respond', authenticateToken, (req, res) => {
         `;
         db.query(rejectQuery, [requestId, userId], (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
-            if (results.affectedRows === 0) {
-                return res.status(404).json({ error: 'Friend request not found or unauthorized' });
-            }
-            res.json({ message: 'Friend request rejected' });
+            res.json({ message: 'Friend request rejected', senderId: requestId });
         });
     }
 });
+
 
 app.post('/friend/remove', authenticateToken, (req, res) => {
     const { friendId } = req.body;
