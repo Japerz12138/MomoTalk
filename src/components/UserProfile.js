@@ -6,6 +6,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState('');
     const [newInput, setNewInput] = useState('');
+    const [showRemoveFriendModal, setShowRemoveFriendModal] = useState(false);
 
     const handleEditClick = (type) => {
         setModalType(type);
@@ -84,7 +85,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                             </button>
                             <button
                                 className="btn btn-danger"
-                                onClick={() => setShowModal(true)} // Show the confirmation modal
+                                onClick={() => setShowRemoveFriendModal(true)} // Show the confirmation modal
                             >
                                 Remove Friend
                             </button>
@@ -93,7 +94,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                 </div>
             </div>
 
-            {/* Modal */}
+            {/* Modal for editing */}
             {showModal && (
                 <div
                     className="modal fade show"
@@ -139,6 +140,52 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                     onClick={handleSave}
                                 >
                                     Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal for remove friend */}
+            {showRemoveFriendModal && (
+                <div
+                    className="modal fade show"
+                    tabIndex="-1"
+                    style={{ display: 'block', backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+                >
+                    <div className="modal-dialog">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    <i className="bi bi-exclamation-triangle"></i> Confirm Remove Friend
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close"
+                                    onClick={() => setShowRemoveFriendModal(false)}
+                                ></button>
+                            </div>
+                            <div className="modal-body">
+                                Are you sure you want to remove this friend?
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowRemoveFriendModal(false)}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-danger"
+                                    onClick={() => {
+                                        onRemoveFriend();
+                                        setShowRemoveFriendModal(false);
+                                    }}
+                                >
+                                    Remove
                                 </button>
                             </div>
                         </div>

@@ -18,6 +18,9 @@ import styles from './styles';
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:5000');
+const DEFAULT_AVATAR = "https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg";
+
+
 
 function App() {
     const [messages, setMessages] = useState([]);
@@ -46,6 +49,9 @@ function App() {
     const [socketInstance, setSocket] = useState(null);
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [isAutoMode, setIsAutoMode] = useState(false);
+    const [unreadMessagesCount, setUnreadMessagesCount] = useState(
+        JSON.parse(localStorage.getItem('unreadMessagesCount')) || {}
+    );
 
     useEffect(() => {
         if (token) {
@@ -108,9 +114,18 @@ function App() {
             console.log(`Joined room for user: ${username}`);
 
             socket.on('receive_message', (message) => {
-                console.log('Received message:', message);
-                setDms((prevDms) => [...prevDms, message]);
+                const senderFriend = friends.find((friend) => friend.id === message.senderId);
+                const updatedMessage = {
+                    ...message,
+                    avatar: senderFriend ? senderFriend.avatar : DEFAULT_AVATAR,
+                };
+
+                setDms((prevDms) => {
+                    const isDuplicate = prevDms.some((dm) => dm.id === updatedMessage.id);
+                    return isDuplicate ? prevDms : [...prevDms, updatedMessage];
+                });
             });
+
 
             socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
                 fetchFriendRequests();
@@ -130,6 +145,20 @@ function App() {
 
             socket.on('receive_message', (message) => {
                 console.log('Received message:', message);
+                const friendId = message.senderId === userId ? message.receiverId : message.senderId;
+
+                if (!selectedFriend || friendId !== selectedFriend.id) {
+                    setUnreadMessagesCount((prev) => {
+                        const updated = {
+                            ...prev,
+                            [friendId]: (prev[friendId] || 0) + 1,
+                        };
+                        localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
+                        return updated;
+                    });
+                } else {
+                    setDms((prevDms) => [...prevDms, message]);
+                }
 
                 // Update MessageList after emit
                 setFriends((prevFriends) => {
@@ -150,16 +179,10 @@ function App() {
                     (message.senderId === selectedFriend?.id && message.receiverId === userId) ||
                     (message.receiverId === selectedFriend?.id && message.senderId === userId)
                 ) {
-                    setDms((prevDms) => [
-                        ...prevDms,
-                        {
-                            ...message,
-                            avatar:
-                                message.senderId === userId
-                                    ? selectedFriend?.avatar || 'https://via.placeholder.com/100'
-                                    : 'https://via.placeholder.com/100',
-                        },
-                    ]);
+                    setDms((prevDms) => {
+                        const isDuplicate = prevDms.some((dm) => dm.id === message.id);
+                        return isDuplicate ? prevDms : [...prevDms, message];
+                    });
                 }
             });
 
@@ -448,6 +471,13 @@ function App() {
 
         setSelectedFriend(friend);
 
+        setUnreadMessagesCount((prev) => {
+            const updated = { ...prev, [friend.id]: 0 };
+            localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
+            return updated;
+        });
+
+
         try {
             setSelectedFriend(friend);
             const response = await axios.get(`http://localhost:5000/dm/${friend.id}`, {
@@ -689,9 +719,8 @@ function App() {
                                         timestamp: friend.lastMessageTime || new Date(),
                                         avatar: friend.avatar,
                                     }))}
-                                    onSelectMessage={(friend) => {
-                                        handleSelectFriend(friend);
-                                    }}
+                                    onSelectMessage={handleSelectFriend}
+                                    unreadMessagesCount={unreadMessagesCount}
                                 />
 
                             )}

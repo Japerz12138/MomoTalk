@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
-function MessageList({ messages, onSelectMessage }) {
-    const DEFAULT_AVATAR = "https://via.placeholder.com/100";
+function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
+    const DEFAULT_AVATAR = 'https://via.placeholder.com/100';
     const [selectedMessageId, setSelectedMessageId] = useState(null);
 
     const handleSelectMessage = (msg) => {
@@ -11,8 +11,11 @@ function MessageList({ messages, onSelectMessage }) {
 
     const formatDate = (timestamp) => {
         const date = new Date(timestamp);
-        return date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }) + ' ' +
-            date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return (
+            date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }) +
+            ' ' +
+            date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+        );
     };
 
     return (
@@ -21,13 +24,15 @@ function MessageList({ messages, onSelectMessage }) {
                 messages.map((msg) => (
                     <div
                         key={msg.id}
-                        className={`list-group-item d-flex align-items-center ${msg.id === selectedMessageId ? 'active' : ''}`}
+                        className={`list-group-item d-flex align-items-center ${
+                            msg.id === selectedMessageId ? 'active' : ''
+                        }`}
                         onClick={() => handleSelectMessage(msg)}
                         style={{ cursor: 'pointer' }}
                     >
                         <img
                             src={msg.avatar || DEFAULT_AVATAR}
-                            alt={msg.username}
+                            alt={msg.nickname}
                             className="rounded-circle me-2"
                             style={{ width: '40px', height: '40px', objectFit: 'cover' }}
                         />
@@ -38,6 +43,10 @@ function MessageList({ messages, onSelectMessage }) {
                             </div>
                             <p className="mb-0 text-muted">{msg.text}</p>
                         </div>
+                        {/* Unread Messages Badge */}
+                        {(unreadMessagesCount[msg.id] || 0) > 0 && (
+                            <span className="badge bg-danger rounded-pill">{unreadMessagesCount[msg.id]}</span>
+                        )}
                     </div>
                 ))
             ) : (
