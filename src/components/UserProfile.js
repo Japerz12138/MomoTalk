@@ -57,8 +57,14 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                         )}
                     </div>
 
-                    <h5 className="card-title">{user.nickname || 'No Nickname'}</h5>
-                    <p className="text-muted">@{user.username}</p>
+                    <h5 className="card-title">
+                        {user.nickname && user.nickname.trim() !== ""
+                            ? user.nickname
+                            : user.username || "No Nickname"}
+                    </h5>
+                    <p className="text-muted">
+                        @{user.username || "Unknown Username"}
+                    </p>
 
                     {isOwnProfile && (
                         <div className="d-grid gap-2 mt-3">

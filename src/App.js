@@ -11,6 +11,7 @@ import FriendRequests from './components/FriendRequests';
 import Sidebar from './components/Sidebar';
 import ToastContainer from "./components/ToastContainer";
 import UserProfile from "./components/UserProfile";
+import SettingsPage from "./components/SettingsPage";
 import './App.css';
 import styles from './styles';
 
@@ -43,6 +44,8 @@ function App() {
     const [avatar, setAvatar] = useState('');
     const toastRef = useRef();
     const [socketInstance, setSocket] = useState(null);
+    const [isDarkMode, setIsDarkMode] = useState(false);
+    const [isAutoMode, setIsAutoMode] = useState(false);
 
     useEffect(() => {
         if (token) {
@@ -126,13 +129,38 @@ function App() {
             socket.emit('join_room', userId);
 
             socket.on('receive_message', (message) => {
-                setDms((prevDms) => [
-                    ...prevDms,
-                    {
-                        ...message,
-                        avatar: selectedFriend?.avatar || "https://via.placeholder.com/32",
-                    },
-                ]);
+                console.log('Received message:', message);
+
+                // Update MessageList after emit
+                setFriends((prevFriends) => {
+                    return prevFriends.map((friend) => {
+                        if (friend.id === message.senderId || friend.id === message.receiverId) {
+                            return {
+                                ...friend,
+                                lastMessage: message.text,
+                                lastMessageTime: message.timestamp,
+                            };
+                        }
+                        return friend;
+                    });
+                });
+
+                // If message that selected related to the chat, update the DM
+                if (
+                    (message.senderId === selectedFriend?.id && message.receiverId === userId) ||
+                    (message.receiverId === selectedFriend?.id && message.senderId === userId)
+                ) {
+                    setDms((prevDms) => [
+                        ...prevDms,
+                        {
+                            ...message,
+                            avatar:
+                                message.senderId === userId
+                                    ? selectedFriend?.avatar || 'https://via.placeholder.com/100'
+                                    : 'https://via.placeholder.com/100',
+                        },
+                    ]);
+                }
             });
 
             return () => {
@@ -140,6 +168,7 @@ function App() {
             };
         }
     }, [userId, selectedFriend]);
+
 
     useEffect(() => {
         socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
@@ -214,6 +243,33 @@ function App() {
         toastRef.current.addToast(title, message);
     };
 
+    const handleUpdatePassword = async (oldPassword, newPassword, confirmPassword) => {
+        if (newPassword !== confirmPassword) {
+            alert("New passwords do not match!");
+            return;
+        }
+
+        try {
+            const response = await axios.post(
+                "http://localhost:5000/user/update",
+                { oldPassword, newPassword },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            alert(response.data.message);
+            handleLogout();
+        } catch (error) {
+            alert(error.response?.data?.error || "Failed to update password.");
+        }
+    };
+
+    const toggleDarkMode = () => {
+        setIsDarkMode((prev) => !prev);
+    };
+
+    const toggleAutoMode = () => {
+        setIsAutoMode((prev) => !prev);
+    };
+
     const fetchFriends = async () => {
         if (!token) return;
         try {
@@ -250,6 +306,8 @@ function App() {
             //init socket for current user
             const newSocket = initializeSocket(loggedInUserId);
             setSocket(newSocket); // Save socket instance
+
+            setActiveSection('chat');
         } catch (error) {
             setError('Invalid username or password.');
             console.error('Login error:', error.response ? error.response.data : error);
@@ -295,7 +353,7 @@ function App() {
     const handleAddFriend = async (username) => {
         try {
             const response = await axios.post('http://localhost:5000/friend/add', { friendUsername: username }, {
-                headers: { Authorization: token },
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             handleShowToast("Success", "Friend request sent!");
@@ -316,7 +374,7 @@ function App() {
     const handleAcceptFriend = async (friendId) => {
         try {
             await axios.post('http://localhost:5000/friend/accept', { friendId }, {
-                headers: { Authorization: token }
+                headers: { Authorization: `Bearer ${token}` }
             });
             alert('Friend request accepted');
             fetchFriends();
@@ -347,7 +405,7 @@ function App() {
             const response = await axios.post(
                 'http://localhost:5000/friend/respond',
                 { requestId, action },
-                { headers: { Authorization: token } }
+                { headers: { Authorization: `Bearer ${token}` } }
             );
 
             handleShowToast(
@@ -384,6 +442,11 @@ function App() {
 
     const handleSelectFriend = async (friend) => {
         if (!token || !friend) return;
+
+        const selected = friends.find((f) => f.id === friend.id);
+        if (!selected) return;
+
+        setSelectedFriend(friend);
 
         try {
             setSelectedFriend(friend);
@@ -445,6 +508,20 @@ function App() {
             setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
 
             setInput('');
+
+            //Update messageList to show latest messages.
+            setFriends((prevFriends) =>
+                prevFriends.map((friend) =>
+                    friend.id === selectedFriend.id
+                        ? {
+                            ...friend,
+                            lastMessage: newMessage.text,
+                            lastMessageTime: newMessage.timestamp,
+                        }
+                        : friend
+                )
+            );
+
         }
     };
 
@@ -454,7 +531,7 @@ function App() {
                 await axios.post(
                     'http://localhost:5000/dm/delete',
                     { friendId: selectedFriend.id },
-                    { headers: { Authorization: token } }
+                    { headers: { Authorization: `Bearer ${token}` } }
                 );
                 alert('DM history deleted');
                 setDms([]);
@@ -514,6 +591,7 @@ function App() {
     const switchToRegister = () => {
         setShowRegister(true);
         setUsername('');
+        setNickname('')
         setPassword('');
         setError('');
     };
@@ -539,6 +617,10 @@ function App() {
             fetchFriendRequests();
         } else if (section === 'chat' && messages.length === 0) {
             fetchMessages();
+        }
+
+        if (section !== 'friend-list') {
+            setSelectedFriend(null);
         }
     };
 
@@ -598,20 +680,30 @@ function App() {
                             }}
                         >
                             {activeSection === 'chat' && (
+                                <MessageList
+                                    messages={friends.map(friend => ({
+                                        id: friend.id,
+                                        username: friend.username,
+                                        nickname: friend.nickname,
+                                        text: friend.lastMessage || 'No messages yet.',
+                                        timestamp: friend.lastMessageTime || new Date(),
+                                        avatar: friend.avatar,
+                                    }))}
+                                    onSelectMessage={(friend) => {
+                                        handleSelectFriend(friend);
+                                    }}
+                                />
+
+                            )}
+
+                            {activeSection === 'friend-list' && (
                                 <FriendList
                                     friends={friends}
                                     onSelectFriend={(friend) => {
                                         handleSelectFriend(friend);
                                     }}
                                 />
-                            )}
-                            {activeSection === 'friend-list' && (
-                                <FriendList
-                                    friends={friends}
-                                    onSelectFriend={(friend) => {
-                                        setSelectedFriend(friend);
-                                    }}
-                                />
+
                             )}
                             {activeSection === 'add-friend' && (
                                 <>
@@ -619,7 +711,12 @@ function App() {
                                         friendRequests={friendRequests}
                                         onRespond={respondToFriendRequest}
                                     />
-                                    <SearchAndAddFriend token={token} onAddFriend={handleAddFriend}/>
+                                    <SearchAndAddFriend
+                                        token={token}
+                                        loggedInUsername={username}
+                                        friendsList={friends}
+                                        onAddFriend={handleAddFriend}
+                                    />
                                 </>
                             )}
                         </div>
@@ -636,7 +733,7 @@ function App() {
                                 <>
                                     <ChatContainer
                                         messages={selectedFriend ? dms : []}
-                                        currentChat={selectedFriend ? selectedFriend.username : 'Select a conversation'}
+                                        currentChat={selectedFriend ? selectedFriend.nickname : 'Select a conversation'}
                                     />
                                     <MessageInput
                                         input={input}
@@ -684,6 +781,15 @@ function App() {
                                     onClose={() => setActiveSection('chat')}
                                 />
 
+                            )}
+                            {activeSection === 'settings' && (
+                                <SettingsPage
+                                    onUpdatePassword={handleUpdatePassword}
+                                    isDarkMode={isDarkMode}
+                                    isAutoMode={isAutoMode}
+                                    onToggleDarkMode={toggleDarkMode}
+                                    onToggleAutoMode={toggleAutoMode}
+                                />
                             )}
 
                         </div>

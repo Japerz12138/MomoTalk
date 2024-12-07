@@ -1,5 +1,5 @@
 html, body {
-  overflow: hidden;
+  overflow: auto;
   height: 100%;
 }
 .dropdown-toggle::after {

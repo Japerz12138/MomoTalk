@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-function SearchAndAddFriend({ token, onAddFriend }) {
+function SearchAndAddFriend({ token, loggedInUsername, friendsList = [], onAddFriend }) {
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
 
@@ -11,7 +11,16 @@ function SearchAndAddFriend({ token, onAddFriend }) {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { query },
             });
-            setSearchResults(response.data);
+
+            // If friendsList Undefined, show empty array
+            const filteredResults = response.data.filter(
+                (user) =>
+                    user.username !== loggedInUsername &&
+                    Array.isArray(friendsList) &&
+                    !friendsList.some((friend) => friend.username === user.username)
+            );
+
+            setSearchResults(filteredResults);
         } catch (error) {
             console.error('Error searching for users:', error);
         }

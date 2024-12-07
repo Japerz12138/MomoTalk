@@ -83,10 +83,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange }) {
                     <a
                         className="dropdown-item rounded-2"
                         href="#"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            alert('Settings clicked');
-                        }}
+                        onClick={() => onSectionChange('settings')}
                     >
                         Settings
                     </a>

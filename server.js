@@ -81,6 +81,7 @@ io.on('connection', (socket) => {
         });
     });
 
+
     // Listen to Friend Request
     socket.on('send_friend_request', ({ senderId, receiverId, senderUsername }) => {
         console.log(`Friend request sent from ${senderId} to ${receiverId}`);
@@ -232,15 +233,23 @@ app.get('/friends', authenticateToken, (req, res) => {
                 FROM dms d
                 WHERE (d.sender_id = u.id AND d.receiver_id = ?)
                    OR (d.sender_id = ? AND d.receiver_id = u.id)
-                ORDER BY d.timestamp DESC LIMIT 1) AS lastMessage
+                ORDER BY d.timestamp DESC LIMIT 1) AS lastMessage,
+               (SELECT d.timestamp
+                FROM dms d
+                WHERE (d.sender_id = u.id AND d.receiver_id = ?)
+                   OR (d.sender_id = ? AND d.receiver_id = u.id)
+                ORDER BY d.timestamp DESC LIMIT 1) AS lastMessageTime
         FROM users u
                  JOIN friends f ON
             ((f.user_id = ? AND f.friend_id = u.id) OR (f.friend_id = ? AND f.user_id = u.id))
-                AND f.status = 'accepted'
+                AND f.status = 'accepted';
     `;
 
-    db.query(friendsQuery, [userId, userId, userId, userId], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
+    db.query(friendsQuery, [userId, userId, userId, userId, userId, userId], (err, results) => {
+        if (err) {
+            // console.error('Error executing friends query:', err.message); // For DEBUG
+            return res.status(500).json({ error: 'Failed to fetch friends' });
+        }
         res.json(results);
     });
 });
@@ -249,29 +258,43 @@ app.post('/friend/add', authenticateToken, (req, res) => {
     const { friendUsername } = req.body;
     const userId = req.user.userId;
 
-    const getFriendQuery = 'SELECT id FROM users WHERE username = ?';
-    db.query(getFriendQuery, [friendUsername], (err, results) => {
+    if (!friendUsername) {
+        return res.status(400).json({ error: 'Friend username is required.' });
+    }
+
+    // No add myself
+    const getUserQuery = 'SELECT id FROM users WHERE username = ?';
+    db.query(getUserQuery, [friendUsername], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (results.length === 0) return res.status(404).json({ error: 'User not found' });
+        if (results.length === 0) return res.status(404).json({ error: 'User not found.' });
 
         const friendId = results[0].id;
 
+        if (friendId === userId) {
+            return res.status(400).json({ error: 'You cannot add yourself as a friend.' });
+        }
+
+        // See if already friend
         const checkFriendshipQuery = `
             SELECT * FROM friends
             WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
         `;
         db.query(checkFriendshipQuery, [userId, friendId, friendId, userId], (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
-            if (results.length > 0) return res.status(400).json({ error: 'Friendship already exists or pending.' });
+            if (results.length > 0) {
+                return res.status(400).json({ error: 'Friendship already exists or pending.' });
+            }
 
+            // Friend request
             const addFriendQuery = 'INSERT INTO friends (user_id, friend_id, status) VALUES (?, ?, "pending")';
             db.query(addFriendQuery, [userId, friendId], (err) => {
                 if (err) return res.status(500).json({ error: err.message });
-                res.json({ message: 'Friend request sent', receiverId: friendId }); //Return ReciverID
+                res.json({ message: 'Friend request sent', receiverId: friendId });
             });
         });
     });
 });
+
 
 
 app.post('/friend/accept', authenticateToken, (req, res) => {
@@ -316,39 +339,60 @@ app.get('/friend/requests', authenticateToken, (req, res) => {
     });
 });
 
-app.post('/user/update', authenticateToken, (req, res) => {
-    const { nickname, avatar } = req.body;
+app.post('/user/update', authenticateToken, async (req, res) => {
+    const { nickname, avatar, oldPassword, newPassword } = req.body;
     const userId = req.user.userId;
 
-    if (!nickname && !avatar) {
-        return res.status(400).json({ error: 'Nothing to update.' });
+    // Validate request
+    if (!nickname && !avatar && (!oldPassword || !newPassword)) {
+        return res.status(400).json({ error: 'No updates provided.' });
     }
 
-    const updates = [];
-    const params = [];
+    try {
+        // Handle password update
+        if (oldPassword && newPassword) {
+            const query = "SELECT password FROM users WHERE id = ?";
+            const [rows] = await db.promise().query(query, [userId]);
 
-    if (nickname) {
-        updates.push('nickname = ?');
-        params.push(nickname);
-    }
+            if (rows.length === 0) {
+                return res.status(404).json({ error: 'User not found.' });
+            }
 
-    if (avatar) {
-        updates.push('avatar = ?');
-        params.push(avatar);
-    }
+            const user = rows[0];
+            const isMatch = await bcrypt.compare(oldPassword, user.password);
+            if (!isMatch) {
+                return res.status(400).json({ error: 'Current password is incorrect.' });
+            }
 
-    params.push(userId);
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+            const updatePasswordQuery = "UPDATE users SET password = ? WHERE id = ?";
+            await db.promise().query(updatePasswordQuery, [hashedPassword, userId]);
+        }
 
-    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
-    db.query(query, params, (err, results) => {
-        if (err) {
-            console.error('Error updating user profile:', err.message);
-            return res.status(500).json({ error: 'Failed to update profile.' });
+        // Handle nickname and avatar updates
+        const updates = [];
+        const params = [];
+        if (nickname) {
+            updates.push('nickname = ?');
+            params.push(nickname);
+        }
+        if (avatar) {
+            updates.push('avatar = ?');
+            params.push(avatar);
+        }
+        if (updates.length > 0) {
+            params.push(userId);
+            const updateQuery = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+            await db.promise().query(updateQuery, params);
         }
 
         res.json({ message: 'Profile updated successfully.' });
-    });
+    } catch (error) {
+        console.error('Error updating user profile:', error.message);
+        res.status(500).json({ error: 'Failed to update profile.' });
+    }
 });
+
 
 
 app.post('/friend/respond', authenticateToken, (req, res) => {

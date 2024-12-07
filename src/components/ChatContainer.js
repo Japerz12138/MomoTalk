@@ -19,7 +19,7 @@ const ChatContainer = ({ messages, currentChat }) => {
             className="chat-container p-3"
             style={{ marginTop: '69px', overflowY: 'auto', height: 'calc(100vh - 150px)' }}
         >
-            <h5 className="text-center text-muted mb-3">{'Chat with @' + currentChat || 'Select a conversation'}</h5>
+            <h5 className="text-center text-muted mb-3">{'Chat with ' + currentChat || 'Select a conversation'}</h5>
             {messages.length > 0 ? (
                 messages.map((message, index) => (
                     <div
