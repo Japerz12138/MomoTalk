@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+const DEFAULT_AVATAR = "https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg";
 const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpdateProfile, onClose }) => {
     const [showModal, setShowModal] = useState(false);
 
@@ -14,7 +15,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
             <div className="card mx-auto" style={{ maxWidth: '400px', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)', marginTop: '69px' }}>
                 <div className="card-body text-center">
                     <img
-                        src={user.avatar || 'https://via.placeholder.com/100'}
+                        src={user.avatar || DEFAULT_AVATAR}
                         alt="Avatar"
                         className="rounded-circle mb-3"
                         style={{ width: '120px', height: '120px', objectFit: 'cover' }}

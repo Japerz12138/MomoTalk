@@ -40,6 +40,7 @@ function App() {
     const [activeSection, setActiveSection] = useState('chat');
     const [selectedChat, setSelectedChat] = useState(null);
     const [userId, setUserId] = useState(null);
+    const [avatar, setAvatar] = useState('');
     const toastRef = useRef();
     const [socketInstance, setSocket] = useState(null);
 
@@ -56,6 +57,7 @@ function App() {
         const savedUsername = localStorage.getItem('username');
         const savedNickname = localStorage.getItem('nickname');
         const savedUserId = localStorage.getItem('userId');
+        const savedAvatar = localStorage.getItem('avatar');
         // console.log('Loaded userId from localStorage:', savedUserId);
         // FOR DEBUG!
         if (savedToken) {
@@ -66,6 +68,7 @@ function App() {
         if (savedUsername) setUsername(savedUsername);
         if (savedNickname) setNickname(savedNickname);
         if (savedUserId) setUserId(parseInt(savedUserId, 10));
+        if (savedAvatar) setAvatar(savedAvatar);
     }, []);
 
     useEffect(() => {
@@ -224,17 +227,19 @@ function App() {
         e.preventDefault();
         try {
             const response = await axios.post('http://localhost:5000/login', { username, password });
-            const { token, username: loggedInUsername, nickname: loggedInNickname, userId: loggedInUserId } = response.data;
+            const { token, username: loggedInUsername, nickname: loggedInNickname, userId: loggedInUserId, avatar } = response.data;
 
             setToken(token);
             setUsername(loggedInUsername);
             setNickname(loggedInNickname);
             setUserId(loggedInUserId);
+            setAvatar(avatar);
 
             localStorage.setItem('token', token);
             localStorage.setItem('username', loggedInUsername);
             localStorage.setItem('nickname', loggedInNickname);
             localStorage.setItem('userId', loggedInUserId);
+            localStorage.setItem('avatar', avatar);
 
             //init socket for current user
             const newSocket = initializeSocket(loggedInUserId);
@@ -575,6 +580,7 @@ function App() {
                             onLogout={handleLogout}
                             nickname={nickname}
                             username={username}
+                            avatar={avatar}
                         />
 
                         <div

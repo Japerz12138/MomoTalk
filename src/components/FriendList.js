@@ -24,7 +24,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
                         src={friend.avatar || DEFAULT_AVATAR}
                         alt={friend.nickname || friend.username}
                         className="rounded-circle me-2"
-                        style={{ width: '32px', height: '32px' }}
+                        style={{ width: '40px', height: '40px', objectFit: 'cover' }}
                     />
                     <div className="flex-grow-1 text-start">
                         <strong>{friend.nickname || friend.username}</strong>

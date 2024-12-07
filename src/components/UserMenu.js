@@ -43,9 +43,13 @@ function UserMenu({ onLogout, nickname, username, avatar }) {
                 <img
                     src={avatar || DEFAULT_AVATAR}
                     alt="Avatar"
-                    width="40"
-                    height="40"
                     className="rounded-circle"
+                    style={{
+                        width: '100%',
+                        height: 'auto',
+                        aspectRatio: '1',
+                        objectFit: 'cover'
+                    }}
                 />
             </a>
             <ul
@@ -109,5 +113,6 @@ function UserMenu({ onLogout, nickname, username, avatar }) {
         </div>
     );
 }
+
 
 export default UserMenu;

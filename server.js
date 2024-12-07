@@ -159,6 +159,8 @@ app.post('/login', (req, res) => {
                 userId: user.id,
                 username: user.username,
                 nickname: user.nickname,
+                avatar: user.avatar || null,
+                email: user.email,
             });
         });
     });

@@ -2,7 +2,7 @@ import React from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import UserMenu from './UserMenu';
 
-const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChange, nickname, username }) => {
+const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChange, nickname, username, avatar }) => {
     return (
         <div className="d-flex flex-column flex-shrink-0 sidebar" style={{ width: '4.5rem', marginTop: '69px', backgroundColor: '#495A6E' }}>
             <ul className="nav nav-pills nav-flush flex-column mb-auto text-center">
@@ -40,7 +40,7 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                     </a>
                 </li>
             </ul>
-            <UserMenu showMenu={showMenu} toggleMenu={toggleMenu} onLogout={onLogout} nickname={nickname} username={username}/>
+            <UserMenu showMenu={showMenu} toggleMenu={toggleMenu} onLogout={onLogout} nickname={nickname} username={username} avatar={avatar}/>
         </div>
     );
 };

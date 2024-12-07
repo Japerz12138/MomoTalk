@@ -30,9 +30,10 @@ const ChatContainer = ({ messages, currentChat }) => {
                             <img
                                 src={message.avatar || DEFAULT_AVATAR}
                                 alt="avatar"
-                                width="32"
-                                height="32"
+                                width="40"
+                                height="40"
                                 className="rounded-circle me-2"
+                                style={{objectFit: 'cover', objectPosition: 'center'}}
                             />
                         )}
                         <div className={`chat-bubble ${message.self ? 'self' : 'other'}`}>
