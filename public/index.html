@@ -10,21 +10,20 @@
       content="Web site created using create-react-app"
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
-
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
+    <link
+            href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&display=swap"
+            rel="stylesheet"
+    />
     <title>MomoTalk</title>
+    <style>
+      .brand-title {
+        font-family: 'Fredoka', sans-serif;
+        font-weight: 500;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        color: white;
+      }
+    </style>
   </head>
   <body>
   <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
@@ -52,24 +51,58 @@
   </svg>
 
 
-  <header class="py-3 border-bottom fixed-top" style="padding-left: 16px; background: linear-gradient(to bottom, #FF95AB, #FF95A9); box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1); z-index: 1000;">
-    <a href="/" class="d-flex align-items-center mb-3 mb-md-0 text-decoration-none" style="color: white; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);">
-      <svg id="_x32_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="32px" height="32px" viewBox="0 0 512 512" xml:space="preserve" fill="#000000"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <style type="text/css">  .st0{fill:#ffffff;}  </style> <g> <path class="st0" d="M399.5,370.196c36.297-31.094,58.75-74.031,58.75-121.469c0-65.578-49.078-121.422-105.656-151.469 c-84.094-42.484-80.359-67.422-94.875-67.422s-10.781,24.938-94.859,67.422c-56.578,30.047-105.641,85.891-105.641,151.469 c0,47.438,22.438,90.375,58.719,121.469c33.906,29.047,160.328,56.359,148.781-66c-2.688-28.563,35.594-30.719,16.719,47.984 c-8.344,34.844-24.797,42.578-29.094,44.734c-4.313,2.156-4.313,5.375,5.375,6.453C317.281,409.992,366.094,398.821,399.5,370.196z "></path> <path class="st0" d="M87.875,372.43c0,0-73.859,25.453-87.875,86.531c111.078,56.828,215.625-5.484,233.563-30.594 C120.813,423.32,87.875,372.43,87.875,372.43z"></path> <path class="st0" d="M424.125,372.43c0,0-34.875,58.437-145.672,55.937c17.922,25.109,122.469,87.422,233.547,30.594 C497.984,397.883,424.125,372.43,424.125,372.43z"></path> </g> </g></svg>
+  <header
+          class="py-3 border-bottom fixed-top"
+          style="
+        padding-left: 16px;
+        background: linear-gradient(to bottom, #FF95AB, #FF95A9);
+        box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+      "
+  >
+    <a
+            href="/"
+            class="d-flex align-items-center mb-3 mb-md-0 text-decoration-none brand-title"
+    >
+      <svg
+              id="_x32_"
+              xmlns="http://www.w3.org/2000/svg"
+              xmlns:xlink="http://www.w3.org/1999/xlink"
+              width="32px"
+              height="32px"
+              viewBox="0 0 512 512"
+              xml:space="preserve"
+              fill="#000000"
+      >
+          <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+        <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+        <g id="SVGRepo_iconCarrier">
+            <style type="text/css">
+              .st0 {
+                fill: #ffffff;
+              }
+            </style>
+          <g>
+              <path
+                      class="st0"
+                      d="M399.5,370.196c36.297-31.094,58.75-74.031,58.75-121.469c0-65.578-49.078-121.422-105.656-151.469 c-84.094-42.484-80.359-67.422-94.875-67.422s-10.781,24.938-94.859,67.422c-56.578,30.047-105.641,85.891-105.641,151.469 c0,47.438,22.438,90.375,58.719,121.469c33.906,29.047,160.328,56.359,148.781-66c-2.688-28.563,35.594-30.719,16.719,47.984 c-8.344,34.844-24.797,42.578-29.094,44.734c-4.313,2.156-4.313,5.375,5.375,6.453C317.281,409.992,366.094,398.821,399.5,370.196z "
+              ></path>
+            <path
+                    class="st0"
+                    d="M87.875,372.43c0,0-73.859,25.453-87.875,86.531c111.078,56.828,215.625-5.484,233.563-30.594 C120.813,423.32,87.875,372.43,87.875,372.43z"
+            ></path>
+            <path
+                    class="st0"
+                    d="M424.125,372.43c0,0-34.875,58.437-145.672,55.937c17.922,25.109,122.469,87.422,233.547,30.594 C497.984,397.883,424.125,372.43,424.125,372.43z"
+            ></path>
+            </g>
+          </g>
+        </svg>
       <span class="fs-4">MomoTalk</span>
     </a>
   </header>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 
 </html>

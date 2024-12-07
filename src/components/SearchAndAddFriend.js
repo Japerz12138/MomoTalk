@@ -18,7 +18,7 @@ function SearchAndAddFriend({ token, onAddFriend }) {
     };
 
     return (
-        <div className="mb-4" style={{ marginTop: '10px', marginLeft: '5px', marginRight: '5px'}} >
+        <div className="mb-4" style={{ marginTop: '10px', marginLeft: '8px', marginRight: '5px' }}>
             <div className="input-group mb-3">
                 <input
                     type="text"
@@ -40,22 +40,36 @@ function SearchAndAddFriend({ token, onAddFriend }) {
                     Search
                 </button>
             </div>
-            <ul className="list-group">
-                {searchResults.map(user => (
-                    <li
-                        key={user.id}
-                        className="list-group-item d-flex justify-content-between align-items-center"
-                    >
-                        {user.nickname || user.username}
-                        <button
-                            className="btn btn-sm btn-success"
-                            onClick={() => onAddFriend(user.username)}
+
+            {searchResults.length === 0 ? (
+                <div
+                    style={{
+                        textAlign: 'center',
+                        marginTop: '30px',
+                        color: '#6c757d',
+                    }}
+                >
+                    <i className="bi bi-search" style={{ fontSize: '3rem', marginBottom: '10px' }}></i>
+                    <p style={{ fontSize: '1.2rem' }}>Start a friendship!</p>
+                </div>
+            ) : (
+                <ul className="list-group">
+                    {searchResults.map((user) => (
+                        <li
+                            key={user.id}
+                            className="list-group-item d-flex justify-content-between align-items-center"
                         >
-                            Add Friend
-                        </button>
-                    </li>
-                ))}
-            </ul>
+                            {user.nickname || user.username}
+                            <button
+                                className="btn btn-sm btn-success"
+                                onClick={() => onAddFriend(user.username)}
+                            >
+                                Add Friend
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 }

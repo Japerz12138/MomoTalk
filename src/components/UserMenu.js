@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-function UserMenu({ onLogout, nickname, username, avatar }) {
+function UserMenu({ onLogout, nickname, username, avatar, onSectionChange }) {
     const [showMenu, setShowMenu] = useState(false);
     const DEFAULT_AVATAR =
         'https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg';
@@ -74,10 +74,7 @@ function UserMenu({ onLogout, nickname, username, avatar }) {
                     <a
                         className="dropdown-item rounded-2"
                         href="#"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            alert('Profile clicked');
-                        }}
+                        onClick={() => onSectionChange('profile')}
                     >
                         Profile
                     </a>

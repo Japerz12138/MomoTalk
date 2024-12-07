@@ -182,6 +182,12 @@ function App() {
     }, [socketInstance]);
 
     useEffect(() => {
+        if (activeSection === 'friend-list') {
+            fetchFriends();
+        }
+    }, [activeSection]);
+
+    useEffect(() => {
         generateCaptcha();
     }, []);
 
@@ -655,18 +661,31 @@ function App() {
                             )}
                             {activeSection === 'profile' && (
                                 <UserProfile
-                                    user={selectedFriend}
-                                    isOwnProfile={false}
-                                    onSendMessage={() => {
-                                        setActiveSection('chat');
-                                        handleSelectFriend(selectedFriend);
+                                    user={{ username, nickname, avatar }}
+                                    isOwnProfile={true}
+                                    onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
+                                        const updatedAvatar = newAvatar || avatar; // IF no new avatar, use the current one
+                                        try {
+                                            const response = await axios.post(
+                                                'http://localhost:5000/user/update',
+                                                { nickname, avatar: updatedAvatar },
+                                                { headers: { Authorization: `Bearer ${token}` } }
+                                            );
+                                            alert(response.data.message);
+                                            setNickname(nickname);
+                                            setAvatar(updatedAvatar);
+                                            localStorage.setItem('nickname', nickname);
+                                            localStorage.setItem('avatar', updatedAvatar);
+                                        } catch (error) {
+                                            console.error('Error updating profile:', error.response?.data || error.message);
+                                            alert('Failed to update profile.');
+                                        }
                                     }}
-                                    onRemoveFriend={() => {
-                                        handleRemoveFriend(selectedFriend.id);
-                                        setSelectedFriend(null);
-                                    }}
+                                    onClose={() => setActiveSection('chat')}
                                 />
+
                             )}
+
                         </div>
                     </div>
 

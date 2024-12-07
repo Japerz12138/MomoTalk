@@ -40,7 +40,7 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                     </a>
                 </li>
             </ul>
-            <UserMenu showMenu={showMenu} toggleMenu={toggleMenu} onLogout={onLogout} nickname={nickname} username={username} avatar={avatar}/>
+            <UserMenu showMenu={showMenu} toggleMenu={toggleMenu} onLogout={onLogout} nickname={nickname} username={username} avatar={avatar} onSectionChange={onSectionChange} activeSection={activeSection}/>
         </div>
     );
 };

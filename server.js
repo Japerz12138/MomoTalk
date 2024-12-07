@@ -316,7 +316,41 @@ app.get('/friend/requests', authenticateToken, (req, res) => {
     });
 });
 
-//TODO: THIS FUNCTION NEEDS FIX! GEZZ!
+app.post('/user/update', authenticateToken, (req, res) => {
+    const { nickname, avatar } = req.body;
+    const userId = req.user.userId;
+
+    if (!nickname && !avatar) {
+        return res.status(400).json({ error: 'Nothing to update.' });
+    }
+
+    const updates = [];
+    const params = [];
+
+    if (nickname) {
+        updates.push('nickname = ?');
+        params.push(nickname);
+    }
+
+    if (avatar) {
+        updates.push('avatar = ?');
+        params.push(avatar);
+    }
+
+    params.push(userId);
+
+    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+    db.query(query, params, (err, results) => {
+        if (err) {
+            console.error('Error updating user profile:', err.message);
+            return res.status(500).json({ error: 'Failed to update profile.' });
+        }
+
+        res.json({ message: 'Profile updated successfully.' });
+    });
+});
+
+
 app.post('/friend/respond', authenticateToken, (req, res) => {
     const { requestId, action } = req.body; // action: "accept" or "reject"
     const userId = req.user.userId;

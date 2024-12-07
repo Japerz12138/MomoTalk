@@ -1,0 +1,17 @@
+.custom-btn {
+    background-color: #495A6E;
+    color: white;
+    border: none;
+    transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.custom-btn:hover {
+    background-color: #3c4c5e;
+    color: white;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.custom-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(73, 90, 110, 0.5);
+}

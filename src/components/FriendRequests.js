@@ -4,7 +4,10 @@ function FriendRequests({ friendRequests, onRespond }) {
     return (
         <div className="p-3 bg-light border rounded" style={{ marginTop: '69px' }}>
             {friendRequests.length === 0 ? (
-                <p className="text-muted">No pending friend requests.</p>
+                <div className="text-center text-muted" style={{ marginTop: '5px' }}>
+                    <i className="bi bi-envelope-open" style={{ fontSize: '1.2rem', marginBottom: '10px' }}></i>
+                    <p className="mb-0" style={{ fontSize: '0.9rem' }}>No pending friend requests</p>
+                </div>
             ) : (
                 <div className="list-group">
                     {friendRequests.map(request => (
