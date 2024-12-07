@@ -4,7 +4,8 @@ CREATE TABLE users (
                        email VARCHAR(100) NOT NULL UNIQUE,
                        password VARCHAR(255) NOT NULL,
                        nickname VARCHAR(50) NOT NULL,
-                       avatar VARCHAR(255) DEFAULT NULL
+                       avatar VARCHAR(255) DEFAULT NULL,
+                       session_token VARCHAR(255) DEFAULT NULL
 );
 
 CREATE TABLE messages (

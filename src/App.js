@@ -44,6 +44,14 @@ function App() {
     const [socketInstance, setSocket] = useState(null);
 
     useEffect(() => {
+        if (token) {
+            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        } else {
+            delete axios.defaults.headers.common['Authorization'];
+        }
+    }, [token]);
+
+    useEffect(() => {
         const savedToken = localStorage.getItem('token');
         const savedUsername = localStorage.getItem('username');
         const savedNickname = localStorage.getItem('nickname');
@@ -52,7 +60,7 @@ function App() {
         // FOR DEBUG!
         if (savedToken) {
             setToken(savedToken);
-            axios.defaults.headers.common['Authorization'] = savedToken;
+            axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
         }
 
         if (savedUsername) setUsername(savedUsername);
@@ -70,6 +78,23 @@ function App() {
             }
         }
     }, [token, userId]);
+
+    useEffect(() => {
+        const interceptor = axios.interceptors.response.use(
+            (response) => response,
+            (error) => {
+                if (error.response?.status === 401) {
+                    console.error('Session expired or unauthorized. Logging out.');
+                    handleLogout();
+                }
+                return Promise.reject(error);
+            }
+        );
+
+
+        return () => axios.interceptors.response.eject(interceptor);
+    }, []);
+
 
     useEffect(() => {
         if (token && username) {
@@ -162,13 +187,17 @@ function App() {
     observer.observe(document.body);
 
     const fetchMessages = async () => {
+        if (!token) return;
         try {
-            const response = await axios.get('http://localhost:5000/messages', {
-                headers: { Authorization: token },
-            });
+            const response = await axios.get('http://localhost:5000/messages');
             setMessages(response.data);
         } catch (error) {
-            console.error('Error fetching messages:', error);
+            if (error.response?.status === 401) {
+                console.error('Unauthorized! Clearing token.');
+                handleLogout();
+            } else {
+                console.error('Error fetching messages:', error);
+            }
         }
     };
 
@@ -177,6 +206,7 @@ function App() {
     };
 
     const fetchFriends = async () => {
+        if (!token) return;
         try {
             const response = await axios.get('http://localhost:5000/friends');
             setFriends(response.data);
@@ -287,6 +317,7 @@ function App() {
     const [friendRequests, setFriendRequests] = useState([]);
 
     const fetchFriendRequests = async () => {
+        if (!token) return;
         try {
             const response = await axios.get('http://localhost:5000/friend/requests');
             setFriendRequests(response.data);
@@ -341,10 +372,12 @@ function App() {
     };
 
     const handleSelectFriend = async (friend) => {
+        if (!token || !friend) return;
+
         try {
             setSelectedFriend(friend);
             const response = await axios.get(`http://localhost:5000/dm/${friend.id}`, {
-                headers: { Authorization: token },
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             const messagesWithAvatar = response.data.map((message) => ({
@@ -355,8 +388,12 @@ function App() {
 
             setDms(messagesWithAvatar);
         } catch (error) {
-            console.error('Error fetching DMs:', error);
-            handleShowToast('Error', 'Failed to load conversation.');
+            if (error.response?.status === 401) {
+                console.error('Unauthorized! Clearing token.');
+                handleLogout();
+            } else {
+                console.error('Error fetching DMs:', error);
+            }
         }
     };
 
@@ -432,10 +469,13 @@ function App() {
         setDms([]);
         setFriendRequests([]);
         setShowMenu(false);
+
         localStorage.removeItem('token');
         localStorage.removeItem('username');
         localStorage.removeItem('nickname');
         localStorage.removeItem('userId');
+
+        setActiveSection('login');
     };
 
     const initializeSocket = (userId) => {
@@ -444,8 +484,6 @@ function App() {
         console.log(`Socket initialized for userId: ${userId}`);
         return newSocket;
     };
-
-
 
     const toggleMenu = () => {
         setShowMenu((prev) => !prev);
@@ -484,14 +522,15 @@ function App() {
     const handleSectionChange = (section) => {
         setActiveSection(section);
 
-        if (section === 'friend-list') {
+        if (section === 'friend-list' && friends.length === 0) {
             fetchFriends();
-        } else if (section === 'add-friend') {
+        } else if (section === 'add-friend' && friendRequests.length === 0) {
             fetchFriendRequests();
-        } else if (section === 'chat') {
+        } else if (section === 'chat' && messages.length === 0) {
             fetchMessages();
         }
     };
+
 
     return (
         <div style={styles.container}>
@@ -513,7 +552,7 @@ function App() {
                         onCaptchaInputChange={(e) => setCaptchaInput(e.target.value)}
                         onRegister={handleRegister}
                         onRefreshCaptcha={generateCaptcha}
-                        onSwitchToLogin={() => switchToLogin()}
+                        onSwitchToLogin={switchToLogin}
                         error={error}
                     />
                 ) : (

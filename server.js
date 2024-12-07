@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const http = require('http');
 const { Server } = require('socket.io');
+const crypto = require('crypto');
 
 // Init Express
 const app = express();
@@ -144,29 +145,52 @@ app.post('/login', (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        const token = jwt.sign({ userId: user.id, username: user.username }, SECRET_KEY, { expiresIn: '1h' });
-        res.json({
-            token,
-            userId: user.id,
-            username: user.username,
-            nickname: user.nickname
+        // Generate new session_token
+        const sessionToken = crypto.randomBytes(32).toString('hex');
+
+        const updateQuery = 'UPDATE users SET session_token = ? WHERE id = ?';
+        db.query(updateQuery, [sessionToken, user.id], (err) => {
+            if (err) return res.status(500).json({ error: 'Failed to update session token' });
+
+            const token = jwt.sign({ userId: user.id, username: user.username, sessionToken }, SECRET_KEY, { expiresIn: '1h' });
+
+            res.json({
+                token,
+                userId: user.id,
+                username: user.username,
+                nickname: user.nickname,
+            });
         });
     });
 });
 
 function authenticateToken(req, res, next) {
-    const token = req.headers['authorization'];
+    const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'No token provided' });
 
-    jwt.verify(token, SECRET_KEY, (err, user) => {
+    jwt.verify(token, SECRET_KEY, (err, decoded) => {
         if (err) {
             console.error('JWT Verification Error:', err.message);
-            return res.status(403).json({ error: 'Invalid or expired token' });
+            return res.status(401).json({ error: 'Invalid or expired token' });
         }
-        req.user = user;
-        next();
+
+        const { userId, sessionToken } = decoded;
+
+        // Auth if session_token matches to prevent same user login multiple times
+        const query = 'SELECT session_token FROM users WHERE id = ?';
+        db.query(query, [userId], (err, results) => {
+            if (err) return res.status(500).json({ error: 'Database error' });
+            if (results.length === 0 || results[0].session_token !== sessionToken) {
+                return res.status(401).json({ error: 'Invalid session token' });
+            }
+
+            req.user = { userId };
+            next();
+        });
     });
 }
+
+
 
 // POST
 app.post('/messages', authenticateToken, (req, res) => {
@@ -403,6 +427,12 @@ app.get('/dm/:friendId', authenticateToken, (req, res) => {
     });
 });
 
+app.get('/protected-resource', authenticateToken, (req, res) => {
+    if (!req.user || req.user.role !== 'admin') { //This role for future use! Currently, no role for users yet!
+        return res.status(403).json({ error: 'Access forbidden: insufficient permissions' });
+    }
+    res.json({ message: 'Welcome, admin!' });
+});
 
 app.get('/users/search', authenticateToken, (req, res) => {
     const { query } = req.query;
