@@ -83,6 +83,8 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
                     <p>Version: 1.0.0</p>
                     <p>Welcome to MomoTalk! This is CSCI 621 - Programming Languages Final Project!</p>
                     <p>Professor: Khalid Mirza</p>
+                    <p>Github: Japerz12138</p>
+                    <a href="https://github.com/Japerz12138/momotalk_v2">https://github.com/Japerz12138/momotalk_v2</a>
                 </div>
             </div>
         </div>

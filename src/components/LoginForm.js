@@ -82,11 +82,12 @@ function LoginForm({
                                             </button>
                                             <hr />
                                         </form>
-                                        <div className="text-center">
-                                            <a className="small" href="forgot-password.html">
-                                                Forgot Password?
-                                            </a>
-                                        </div>
+                                        {/*Not for show now*/}
+                                        {/*<div className="text-center">*/}
+                                        {/*    <a className="small" href="forgot-password.html">*/}
+                                        {/*        Forgot Password?*/}
+                                        {/*    </a>*/}
+                                        {/*</div>*/}
                                         <div className="text-center">
                                             <button
                                                 type="button"

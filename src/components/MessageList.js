@@ -54,7 +54,10 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                 </strong>
                                 <small>{formatDate(msg.timestamp)}</small>
                             </div>
-                            <p className="mb-0 text-muted">{msg.text}</p>
+                            <p className="mb-0 text-muted">
+                                {msg.text.length > 19 ? `${msg.text.slice(0, 19)}...` : msg.text}
+                            </p>
+
                         </div>
 
                     </div>

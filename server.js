@@ -153,7 +153,7 @@ app.post('/login', (req, res) => {
         db.query(updateQuery, [sessionToken, user.id], (err) => {
             if (err) return res.status(500).json({ error: 'Failed to update session token' });
 
-            const token = jwt.sign({ userId: user.id, username: user.username, sessionToken }, SECRET_KEY, { expiresIn: '1h' });
+            const token = jwt.sign({ userId: user.id, username: user.username, sessionToken }, SECRET_KEY, { expiresIn: '3h' });
 
             res.json({
                 token,
