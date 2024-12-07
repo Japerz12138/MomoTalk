@@ -12,7 +12,6 @@ function SearchAndAddFriend({ token, loggedInUsername, friendsList = [], onAddFr
                 params: { query },
             });
 
-            // If friendsList Undefined, show empty array
             const filteredResults = response.data.filter(
                 (user) =>
                     user.username !== loggedInUsername &&
@@ -26,6 +25,13 @@ function SearchAndAddFriend({ token, loggedInUsername, friendsList = [], onAddFr
         }
     };
 
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevents form submission if inside a form
+            handleSearch();
+        }
+    };
+
     return (
         <div className="mb-4" style={{ marginTop: '10px', marginLeft: '8px', marginRight: '5px' }}>
             <div className="input-group mb-3">
@@ -35,6 +41,7 @@ function SearchAndAddFriend({ token, loggedInUsername, friendsList = [], onAddFr
                     placeholder="Search by username"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={handleKeyDown} // Added Enter key functionality
                 />
                 <button
                     className="btn btn-primary"

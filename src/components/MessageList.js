@@ -38,15 +38,25 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                         />
                         <div className="flex-grow-1">
                             <div className="d-flex justify-content-between">
-                                <strong>{msg.nickname}</strong>
+                                <strong>
+                                    {msg.nickname}
+                                    {(unreadMessagesCount[msg.id] || 0) > 0 && (
+                                        <span
+                                            className="badge bg-danger rounded-pill"
+                                            style={{
+                                                marginLeft: '8px',
+                                                fontSize: '0.7rem',
+                                            }}
+                                        >
+                    {unreadMessagesCount[msg.id]}
+                </span>
+                                    )}
+                                </strong>
                                 <small>{formatDate(msg.timestamp)}</small>
                             </div>
                             <p className="mb-0 text-muted">{msg.text}</p>
                         </div>
-                        {/* Unread Messages Badge */}
-                        {(unreadMessagesCount[msg.id] || 0) > 0 && (
-                            <span className="badge bg-danger rounded-pill">{unreadMessagesCount[msg.id]}</span>
-                        )}
+
                     </div>
                 ))
             ) : (
@@ -60,8 +70,8 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                         height: '100%',
                     }}
                 >
-                    <i className="bi bi-chat-left-dots" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
-                    <div style={{ marginTop: '10px' }}>Pick a friend to talk to!</div>
+                    <i className="bi bi-chat-left-dots" style={{fontSize: '3rem', opacity: 0.5}}></i>
+                    <div style={{marginTop: '10px'}}>Pick a friend to talk to!</div>
                 </div>
             )}
         </div>

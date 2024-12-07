@@ -1,0 +1,122 @@
+/* General Styles */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f8f9fa;
+    color: #4C5B6F;
+}
+
+.container {
+    margin-top: 20px;
+}
+
+/* Card Styling */
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Form Input Styles */
+.form-control-user {
+    border: 1px solid #ced4da;
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    color: #4C5B6F;
+    transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.form-control-user:focus {
+    border-color: #4C5B6F;
+    box-shadow: 0 0 5px rgba(76, 91, 111, 0.5);
+}
+
+/* Buttons */
+.btn-primary {
+    background-color: #4C5B6F;
+    border: none;
+    border-radius: 10px;
+    transition: background-color 0.3s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.btn-primary:hover {
+    background-color: #394753;
+    transform: scale(1.05);
+}
+
+.btn-primary:focus {
+    background-color: #394753;
+    box-shadow: 0 0 8px rgba(76, 91, 111, 0.5);
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border: none;
+    border-radius: 10px;
+    transition: background-color 0.3s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+    transform: scale(1.05);
+}
+
+.btn-secondary:focus {
+    background-color: #5a6268;
+    box-shadow: 0 0 8px rgba(76, 91, 111, 0.5);
+}
+
+/* Links */
+.small {
+    color: #4C5B6F;
+    text-decoration: none;
+    transition: color 0.3s ease-in-out;
+}
+
+.small:hover {
+    color: #394753;
+    text-decoration: underline;
+}
+
+/* Captcha Container */
+.captchaContainer {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.captcha {
+    font-size: 1.25rem;
+    font-weight: bold;
+    background-color: #e9ecef;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    margin-right: 10px;
+    color: #4C5B6F;
+}
+
+.captchaButton {
+    background-color: #4C5B6F;
+    color: #fff;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    transition: background-color 0.3s ease-in-out;
+}
+
+.captchaButton:hover {
+    background-color: #394753;
+    cursor: pointer;
+}
+
+/* Error Messages */
+.text-danger-emphasis {
+    color: #721c24 !important;
+}
+
+.bg-danger-subtle {
+    background-color: #f8d7da !important;
+}
+
+.border-danger-subtle {
+    border-color: #f5c6cb !important;
+}

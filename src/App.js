@@ -145,7 +145,15 @@ function App() {
 
             socket.on('receive_message', (message) => {
                 console.log('Received message:', message);
+
                 const friendId = message.senderId === userId ? message.receiverId : message.senderId;
+                const senderFriend = friends.find((friend) => friend.id === friendId);
+
+                const updatedMessage = {
+                    ...message,
+                    avatar: senderFriend ? senderFriend.avatar : DEFAULT_AVATAR,
+                    self: message.senderId === userId,
+                };
 
                 if (!selectedFriend || friendId !== selectedFriend.id) {
                     setUnreadMessagesCount((prev) => {
@@ -157,40 +165,30 @@ function App() {
                         return updated;
                     });
                 } else {
-                    setDms((prevDms) => [...prevDms, message]);
+                    setDms((prevDms) => [...prevDms, updatedMessage]);
                 }
 
-                // Update MessageList after emit
-                setFriends((prevFriends) => {
-                    return prevFriends.map((friend) => {
-                        if (friend.id === message.senderId || friend.id === message.receiverId) {
-                            return {
+                //Fix the avatar problem
+                setFriends((prevFriends) =>
+                    prevFriends.map((friend) =>
+                        friend.id === friendId
+                            ? {
                                 ...friend,
                                 lastMessage: message.text,
                                 lastMessageTime: message.timestamp,
-                            };
-                        }
-                        return friend;
-                    });
-                });
-
-                // If message that selected related to the chat, update the DM
-                if (
-                    (message.senderId === selectedFriend?.id && message.receiverId === userId) ||
-                    (message.receiverId === selectedFriend?.id && message.senderId === userId)
-                ) {
-                    setDms((prevDms) => {
-                        const isDuplicate = prevDms.some((dm) => dm.id === message.id);
-                        return isDuplicate ? prevDms : [...prevDms, message];
-                    });
-                }
+                                avatar: senderFriend ? senderFriend.avatar : friend.avatar,
+                            }
+                            : friend
+                    )
+                );
             });
 
             return () => {
                 socket.off('receive_message');
             };
         }
-    }, [userId, selectedFriend]);
+    }, [userId, selectedFriend, friends]);
+
 
 
     useEffect(() => {
@@ -455,7 +453,7 @@ function App() {
     const handleRemoveFriend = async (friendId) => {
         try {
             await axios.post('http://localhost:5000/friend/remove', { friendId }, {
-                headers: { Authorization: token },
+                headers: { Authorization: `Bearer ${token}` },
             });
             fetchFriends();
         } catch (error) {

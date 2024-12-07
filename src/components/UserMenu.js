@@ -48,7 +48,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange }) {
                         width: '100%',
                         height: 'auto',
                         aspectRatio: '1',
-                        objectFit: 'cover'
+                        objectFit: 'cover',
                     }}
                 />
             </a>
@@ -74,7 +74,10 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange }) {
                     <a
                         className="dropdown-item rounded-2"
                         href="#"
-                        onClick={() => onSectionChange('profile')}
+                        onClick={() => {
+                            onSectionChange('profile');
+                            closeMenu(); // Close menu after action
+                        }}
                     >
                         Profile
                     </a>
@@ -83,7 +86,10 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange }) {
                     <a
                         className="dropdown-item rounded-2"
                         href="#"
-                        onClick={() => onSectionChange('settings')}
+                        onClick={() => {
+                            onSectionChange('settings');
+                            closeMenu(); // Close menu after action
+                        }}
                     >
                         Settings
                     </a>
@@ -98,6 +104,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange }) {
                         onClick={(e) => {
                             e.preventDefault();
                             onLogout();
+                            closeMenu(); // Close menu after logout
                         }}
                     >
                         Logout
@@ -107,6 +114,5 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange }) {
         </div>
     );
 }
-
 
 export default UserMenu;
