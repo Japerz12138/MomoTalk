@@ -13,31 +13,48 @@ const crypto = require('crypto');
 const app = express();
 const PORT = 5000;
 const SECRET_KEY = process.env.SECRET_KEY;
-const SERVER_DB_PW = process.env.SERVER_DB_PW;
+const DB_HOST = process.env.DB_HOST;
+const DB_USER = process.env.DB_USER;
+const DB_PASSWORD = process.env.DB_PASSWORD;
+const DB_DATABASE = process.env.DB_DATABASE;
+const HOST_DOMAIN = process.env.HOST_DOMAIN;
 
-app.use(cors());
+app.use(
+    cors({
+        origin: HOST_DOMAIN,
+        methods: ["GET", "POST"],
+        credentials: true,
+    })
+);
+
 app.use(bodyParser.json());
 
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: SERVER_DB_PW,
-    database: 'momotalk_v2',
+const db = mysql.createPool({
+    host: DB_HOST,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
 });
 
-db.connect((err) => {
+db.getConnection((err, connection) => {
     if (err) {
-        console.error('Error connecting to MySQL:', err);
-        return;
+        console.error('Error connecting to the database:', err.message);
+    } else {
+        console.log('Connected to the database');
+        connection.release();
     }
-    console.log('Connected to MySQL');
 });
 
 // Socket.io Instance
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: '*',
+        origin: HOST_DOMAIN,
+        methods: ['GET', 'POST'],
+        credentials: true,
     },
 });
 
@@ -102,9 +119,13 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+        socket.removeAllListeners();
     });
 });
 
+app.get('/api', (req, res) => {
+    res.json({ message: 'Hello from momotalk api!' });
+});
 
 // ROUTERS
 app.post('/register', async (req, res) => {
@@ -192,8 +213,6 @@ function authenticateToken(req, res, next) {
         });
     });
 }
-
-
 
 // POST
 app.post('/messages', authenticateToken, (req, res) => {
@@ -295,8 +314,6 @@ app.post('/friend/add', authenticateToken, (req, res) => {
     });
 });
 
-
-
 app.post('/friend/accept', authenticateToken, (req, res) => {
     const { friendId } = req.body;
     const userId = req.user.userId;
@@ -393,8 +410,6 @@ app.post('/user/update', authenticateToken, async (req, res) => {
     }
 });
 
-
-
 app.post('/friend/respond', authenticateToken, (req, res) => {
     const { requestId, action } = req.body; // action: "accept" or "reject"
     const userId = req.user.userId;
@@ -421,18 +436,17 @@ app.post('/friend/respond', authenticateToken, (req, res) => {
     }
 });
 
-
 app.post('/friend/remove', authenticateToken, (req, res) => {
     const { friendId } = req.body;
     const userId = req.user.userId;
 
     const deleteFriendQuery = `
-        DELETE FROM friends 
+        DELETE FROM friends
         WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
     `;
 
     const deleteDMQuery = `
-        DELETE FROM dms 
+        DELETE FROM dms
         WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
     `;
 
