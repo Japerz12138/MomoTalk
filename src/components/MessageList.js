@@ -18,6 +18,10 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
         );
     };
 
+    const truncateNickname = (nickname) => {
+        return nickname.length > 12 ? `${nickname.slice(0, 12)}...` : nickname;
+    };
+
     return (
         <div className="list-group" style={{ marginTop: '69px', height: 'calc(100vh - 69px)', position: 'relative' }}>
             {messages.length > 0 ? (
@@ -38,8 +42,10 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                         />
                         <div className="flex-grow-1">
                             <div className="d-flex justify-content-between">
-                                <strong>
-                                    {msg.nickname}
+                                <strong
+                                    title={msg.nickname}
+                                >
+                                    {truncateNickname(msg.nickname)}
                                     {(unreadMessagesCount[msg.id] || 0) > 0 && (
                                         <span
                                             className="badge bg-danger rounded-pill"
@@ -48,8 +54,8 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                                 fontSize: '0.7rem',
                                             }}
                                         >
-                    {unreadMessagesCount[msg.id]}
-                </span>
+                                            {unreadMessagesCount[msg.id]}
+                                        </span>
                                     )}
                                 </strong>
                                 <small>{formatDate(msg.timestamp)}</small>
@@ -57,9 +63,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                             <p className="mb-0 text-muted">
                                 {msg.text.length > 10 ? `${msg.text.slice(0, 10)}...` : msg.text}
                             </p>
-
                         </div>
-
                     </div>
                 ))
             ) : (
@@ -73,8 +77,8 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                         height: '100%',
                     }}
                 >
-                    <i className="bi bi-chat-left-dots" style={{fontSize: '3rem', opacity: 0.5}}></i>
-                    <div style={{marginTop: '10px'}}>Pick a friend to talk to!</div>
+                    <i className="bi bi-chat-left-dots" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                    <div style={{ marginTop: '10px' }}>Pick a friend to talk to!</div>
                 </div>
             )}
         </div>
