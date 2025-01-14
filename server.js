@@ -83,14 +83,14 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const query = 'INSERT INTO dms (sender_id, receiver_id, text, timestamp) VALUES (?, ?, ?, NOW())';
+        const query = 'INSERT INTO dms (sender_id, receiver_id, text, timestamp) VALUES (?, ?, ?, UTC_TIMESTAMP());';
         db.query(query, [senderId, receiverId, text], (err) => {
             if (!err) {
                 io.to(receiverId.toString()).emit('receive_message', {
                     senderId,
                     receiverId,
                     text,
-                    timestamp: new Date(),
+                    timestamp: new Date().toISOString(), //TO UTC TIME
                 });
             } else {
                 console.error('Error saving message:', err.message);
@@ -217,7 +217,7 @@ function authenticateToken(req, res, next) {
 // POST
 app.post('/messages', authenticateToken, (req, res) => {
     const { text } = req.body;
-    const query = 'INSERT INTO messages (user_id, text, timestamp) VALUES (?, ?, NOW())';
+    const query = 'INSERT INTO messages (user_id, text, timestamp) VALUES (?, ?, UTC_TIMESTAMP())';
 
     db.query(query, [req.user.userId, text], (err) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -494,7 +494,7 @@ app.post('/dm/send', authenticateToken, (req, res) => {
     const { receiverId, text } = req.body;
     const senderId = req.user.userId;
 
-    const sendDMQuery = 'INSERT INTO dms (sender_id, receiver_id, text, timestamp) VALUES (?, ?, ?, NOW())';
+    const sendDMQuery = 'INSERT INTO dms (sender_id, receiver_id, text, timestamp) VALUES (?, ?, ?, UTC_TIMESTAMP())';
     db.query(sendDMQuery, [senderId, receiverId, text], (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ message: 'DM sent' });
@@ -554,7 +554,7 @@ app.post('/dm/delete', authenticateToken, (req, res) => {
 const cleanExpiredRequests = () => {
     const deleteQuery = `
         DELETE FROM friends
-        WHERE status = 'pending' AND TIMESTAMPDIFF(DAY, created_at, NOW()) > 30
+        WHERE status = 'pending' AND TIMESTAMPDIFF(DAY, created_at, UTC_TIMESTAMP()) > 30
     `;
 
     db.query(deleteQuery, (err, results) => {
