@@ -54,7 +54,7 @@ This is my first time using React to write a webapp that needs to use sockets, a
     REACT_APP_SERVER_DOMAIN=YOUR_SERVER_DOMAIN
     ```
    
-   > NOTE: DO NOT ADD "\" AT THE END OF `CLIENT_DOMAIN` AND `REACT_APP_SERVER_DOMAIN`!
+   > NOTE: DO NOT ADD "/" AT THE END OF `CLIENT_DOMAIN` AND `REACT_APP_SERVER_DOMAIN`!
 
 4. Start the server:
     ```bash
