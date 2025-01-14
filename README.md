@@ -51,7 +51,11 @@ This is my first time using React to write a webapp that needs to use sockets, a
     DB_PASSWORD= YOUR_DB_HOST
     DB_DATABASE= YOUR_DATABASE
     CLIENT_DOMAIN= DOMAIN_YOU_GONNA_HOST
+    REACT_APP_SERVER_DOMAIN=YOUR_SERVER_DOMAIN
     ```
+   
+   > NOTE: DO NOT ADD "\" AT THE END OF `CLIENT_DOMAIN` AND `REACT_APP_SERVER_DOMAIN`!
+
 4. Start the server:
     ```bash
     node server.js
@@ -119,7 +123,11 @@ Momotalk 是一个以《蔚蓝档案》手游中的虚拟聊天平台《MomoTalk
     DB_PASSWORD= YOUR_DB_HOST
     DB_DATABASE= YOUR_DATABASE
     CLIENT_DOMAIN= DOMAIN_YOU_GONNA_HOST
+    REACT_APP_SERVER_DOMAIN=YOUR_SERVER_DOMAIN
     ```
+   
+   > 注意: `CLIENT_DOMAIN` 和 `REACT_APP_SERVER_DOMAIN` 结尾不要加"/"！
+
 4. 启动服务：
     ```bash
     node server.js

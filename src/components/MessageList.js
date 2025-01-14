@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
+import { DEFAULT_AVATAR } from '../constants';
 
 function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
-    const DEFAULT_AVATAR = 'https://via.placeholder.com/100';
     const [selectedMessageId, setSelectedMessageId] = useState(null);
 
     const handleSelectMessage = (msg) => {
@@ -55,7 +55,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                 <small>{formatDate(msg.timestamp)}</small>
                             </div>
                             <p className="mb-0 text-muted">
-                                {msg.text.length > 19 ? `${msg.text.slice(0, 19)}...` : msg.text}
+                                {msg.text.length > 10 ? `${msg.text.slice(0, 10)}...` : msg.text}
                             </p>
 
                         </div>

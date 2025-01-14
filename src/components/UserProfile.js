@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import '../custom_styles/UserProfile.css';
-const DEFAULT_AVATAR = "https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg";
+import { DEFAULT_AVATAR } from '../constants';
 
 const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpdateProfile, onClose }) => {
     const [showModal, setShowModal] = useState(false);

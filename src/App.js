@@ -14,11 +14,11 @@ import UserProfile from "./components/UserProfile";
 import SettingsPage from "./components/SettingsPage";
 import './App.css';
 import styles from './styles';
+import { DEFAULT_AVATAR } from './constants';
 
 import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:5000');
-const DEFAULT_AVATAR = "https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg";
+const socket = io(process.env.REACT_APP_SERVER_DOMAIN);
 
 
 
@@ -248,7 +248,7 @@ function App() {
     const fetchMessages = async () => {
         if (!token) return;
         try {
-            const response = await axios.get('http://localhost:5000/messages');
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/messages`);
             setMessages(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
@@ -272,7 +272,7 @@ function App() {
 
         try {
             const response = await axios.post(
-                "http://localhost:5000/user/update",
+                `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
                 { oldPassword, newPassword },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -294,7 +294,7 @@ function App() {
     const fetchFriends = async () => {
         if (!token) return;
         try {
-            const response = await axios.get('http://localhost:5000/friends');
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/friends`);
             setFriends(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
@@ -309,7 +309,7 @@ function App() {
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
-            const response = await axios.post('http://localhost:5000/login', { username, password });
+            const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/login`, { username, password });
             const { token, username: loggedInUsername, nickname: loggedInNickname, userId: loggedInUserId, avatar } = response.data;
 
             setToken(token);
@@ -357,7 +357,7 @@ function App() {
         }
 
         try {
-            await axios.post('http://localhost:5000/register', {
+            await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/register`, {
                 username: newUsername,
                 email,
                 password: newPassword,
@@ -373,7 +373,7 @@ function App() {
 
     const handleAddFriend = async (username) => {
         try {
-            const response = await axios.post('http://localhost:5000/friend/add', { friendUsername: username }, {
+            const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/add`, { friendUsername: username }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
@@ -394,7 +394,7 @@ function App() {
 
     const handleAcceptFriend = async (friendId) => {
         try {
-            await axios.post('http://localhost:5000/friend/accept', { friendId }, {
+            await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/accept`, { friendId }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             alert('Friend request accepted');
@@ -409,7 +409,7 @@ function App() {
     const fetchFriendRequests = async () => {
         if (!token) return;
         try {
-            const response = await axios.get('http://localhost:5000/friend/requests');
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/requests`);
             setFriendRequests(response.data);
         } catch (error) {
             if (error.response?.status === 401) {
@@ -424,7 +424,7 @@ function App() {
     const respondToFriendRequest = async (requestId, action) => {
         try {
             const response = await axios.post(
-                'http://localhost:5000/friend/respond',
+                `${process.env.REACT_APP_SERVER_DOMAIN}/friend/respond`,
                 { requestId, action },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -452,7 +452,7 @@ function App() {
 
     const handleRemoveFriend = async (friendId) => {
         try {
-            await axios.post('http://localhost:5000/friend/remove', { friendId }, {
+            await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/remove`, { friendId }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             fetchFriends();
@@ -478,14 +478,14 @@ function App() {
 
         try {
             setSelectedFriend(friend);
-            const response = await axios.get(`http://localhost:5000/dm/${friend.id}`, {
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/dm/${friend.id}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
             const messagesWithAvatar = response.data.map((message) => ({
                 ...message,
                 self: message.senderId === userId,
-                avatar: message.senderId === userId ? 'https://via.placeholder.com/100' : friend.avatar,
+                avatar: message.senderId === userId ? DEFAULT_AVATAR : friend.avatar,
             }));
 
             setDms(messagesWithAvatar);
@@ -506,7 +506,7 @@ function App() {
         if (input.trim() && token) {
             try {
                 await axios.post(
-                    'http://localhost:5000/messages',
+                    `${process.env.REACT_APP_SERVER_DOMAIN}/messages`,
                     { text: input },
                     { headers: { Authorization: token } }
                 );
@@ -557,7 +557,7 @@ function App() {
         if (selectedFriend) {
             try {
                 await axios.post(
-                    'http://localhost:5000/dm/delete',
+                    `${process.env.REACT_APP_SERVER_DOMAIN}/dm/delete`,
                     { friendId: selectedFriend.id },
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
@@ -595,7 +595,7 @@ function App() {
     };
 
     const initializeSocket = (userId) => {
-        const newSocket = io('http://localhost:5000');
+        const newSocket = io(`${process.env.REACT_APP_SERVER_DOMAIN}`);
         newSocket.emit('join_room', userId);
         console.log(`Socket initialized for userId: ${userId}`);
         return newSocket;
@@ -791,7 +791,7 @@ function App() {
                                         const updatedAvatar = newAvatar || avatar; // IF no new avatar, use the current one
                                         try {
                                             const response = await axios.post(
-                                                'http://localhost:5000/user/update',
+                                                `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
                                                 { nickname, avatar: updatedAvatar },
                                                 { headers: { Authorization: `Bearer ${token}` } }
                                             );

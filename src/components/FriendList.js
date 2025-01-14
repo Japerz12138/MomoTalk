@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
+import { DEFAULT_AVATAR } from '../constants';
 
 const FriendList = ({ friends, onSelectFriend }) => {
     const [selectedFriendId, setSelectedFriendId] = useState(null);
-    const DEFAULT_AVATAR = "https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg";
 
     const handleSelectFriend = (friend) => {
         setSelectedFriendId(friend.id);

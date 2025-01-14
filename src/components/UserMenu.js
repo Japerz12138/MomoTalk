@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { DEFAULT_AVATAR } from '../constants';
 
 function UserMenu({ onLogout, nickname, username, avatar, onSectionChange }) {
     const [showMenu, setShowMenu] = useState(false);
-    const DEFAULT_AVATAR =
-        'https://static.vecteezy.com/system/resources/thumbnails/003/337/584/small/default-avatar-photo-placeholder-profile-icon-vector.jpg';
 
     const toggleMenu = () => {
         setShowMenu((prev) => !prev);
