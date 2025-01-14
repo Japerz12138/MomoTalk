@@ -52,6 +52,8 @@ function App() {
     const [unreadMessagesCount, setUnreadMessagesCount] = useState(
         JSON.parse(localStorage.getItem('unreadMessagesCount')) || {}
     );
+    const [showNotificationModal, setShowNotificationModal] = useState(false);
+
 
     useEffect(() => {
         if (token) {
@@ -114,6 +116,18 @@ function App() {
             console.log(`Joined room for user: ${username}`);
 
             socket.on('receive_message', (message) => {
+                //Create new notification
+                if (Notification.permission === 'granted') {
+                    const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
+                        body: message.text,
+                        icon: message.avatar || DEFAULT_AVATAR,
+                    });
+
+                    notification.onclick = () => {
+                        window.focus();
+                    };
+
+                }
                 const senderFriend = friends.find((friend) => friend.id === message.senderId);
                 const updatedMessage = {
                     ...message,
@@ -146,6 +160,20 @@ function App() {
             socket.on('receive_message', (message) => {
                 console.log('Received message:', message);
 
+                //Check Local Storge notification settings
+                const isInternalNotificationEnabled = JSON.parse(localStorage.getItem("internalNotificationEnabled")) || false;
+
+                if (Notification.permission === 'granted' && isInternalNotificationEnabled) {
+                    const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
+                        body: message.text,
+                        icon: message.avatar || DEFAULT_AVATAR,
+                    });
+
+                    notification.onclick = () => {
+                        window.focus();
+                    };
+                }
+
                 const friendId = message.senderId === userId ? message.receiverId : message.senderId;
                 const senderFriend = friends.find((friend) => friend.id === friendId);
 
@@ -168,7 +196,6 @@ function App() {
                     setDms((prevDms) => [...prevDms, updatedMessage]);
                 }
 
-                //Fix the avatar problem
                 setFriends((prevFriends) =>
                     prevFriends.map((friend) =>
                         friend.id === friendId
@@ -240,6 +267,27 @@ function App() {
     useEffect(() => {
         generateCaptcha();
     }, []);
+
+    //Check if have broswer notification permission
+    useEffect(() => {
+        const notificationDismissed = localStorage.getItem('notificationDismissed');
+        if (Notification.permission === 'default' && !notificationDismissed) {
+            setShowNotificationModal(true);
+        }
+    }, []);
+
+    const handleRequestNotificationPermission = () => {
+        Notification.requestPermission().then((permission) => {
+            setShowNotificationModal(false);
+            console.log(`Notification permission: ${permission}`);
+        });
+    };
+
+    const handleDismissNotification = () => {
+        setShowNotificationModal(false);
+        localStorage.setItem('notificationDismissed', 'true');
+    };
+    //Notification check function ends
 
     // Ignore ResizeObserver error Caused by LastPass
     const observer = new ResizeObserver(() => null);
@@ -656,6 +704,30 @@ function App() {
     return (
         <div style={styles.container}>
             <ToastContainer ref={toastRef} />
+            {showNotificationModal && (
+                <div className="modal" style={{ display: 'block', backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+                    <div className="modal-dialog">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">Enable Notifications</h5>
+                                <button type="button" className="btn-close" onClick={handleDismissNotification}></button>
+                            </div>
+                            <div className="modal-body">
+                                <p>We recommend enabling notifications to stay updated with new messages and friend requests.</p>
+                                <p>If you dismiss this message, you can still enable it in Momotalk settings page!</p>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-primary" onClick={handleRequestNotificationPermission}>
+                                    Enable Notifications
+                                </button>
+                                <button className="btn btn-secondary" onClick={handleDismissNotification}>
+                                    No, Thanks
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             {!token ? (
                 showRegister ? (
                     <RegisterForm

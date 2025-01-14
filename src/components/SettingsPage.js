@@ -1,9 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMode, onToggleAutoMode }) => {
     const [oldPassword, setOldPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
+    const [internalNotificationEnabled, setInternalNotificationEnabled] = useState(() => {
+        const storedValue = localStorage.getItem("internalNotificationEnabled");
+        if (storedValue === null) {
+            localStorage.setItem("internalNotificationEnabled", JSON.stringify(true));
+            return true;
+        }
+        return JSON.parse(storedValue);
+    });
+
+    useEffect(() => {
+        setNotificationPermission(Notification.permission);
+    }, []);
 
     const handlePasswordUpdate = () => {
         onUpdatePassword(oldPassword, newPassword, confirmPassword);
@@ -12,9 +25,29 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
         setConfirmPassword("");
     };
 
+    const requestNotificationPermission = () => {
+        if (notificationPermission === "denied") {
+            alert(
+                "Notification permission is denied! Please enable it by clicking the \"i\" icon on the left side of your URL bar and change the website notification setting!"
+            );
+        } else {
+            Notification.requestPermission().then((permission) => {
+                setNotificationPermission(permission);
+            });
+        }
+    };
+
+    const toggleInternalNotification = () => {
+        const newStatus = !internalNotificationEnabled;
+        setInternalNotificationEnabled(newStatus);
+        localStorage.setItem("internalNotificationEnabled", JSON.stringify(newStatus));
+    };
+
     return (
-        <div className="container mt-5" style={{ overflowY:"auto" }}>
-            <h1 className="mb-4" style={{marginTop:"30px"}}>Settings</h1>
+        <div className="container mt-5" style={{ overflowY: "auto" }}>
+            <h1 className="mb-4" style={{ marginTop: "30px" }}>Settings</h1>
+
+            {/* Change Password Section */}
             <div className="card mb-4">
                 <div className="card-body">
                     <h5 className="card-title">Change Password</h5>
@@ -77,6 +110,50 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
             {/*    </div>*/}
             {/*</div>*/}
 
+
+            {/* Notifications Section */}
+            <div className="card mb-4">
+                <div className="card-body">
+                    <h5 className="card-title">Notifications</h5>
+                    {notificationPermission === "granted" ? (
+                        <>
+                            <div className="alert alert-success d-flex align-items-center" role="alert">
+                                <div>Notification has been enabled!</div>
+                            </div>
+                            <div className="form-check form-switch mt-3">
+                                <input
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    id="internalNotificationSwitch"
+                                    checked={internalNotificationEnabled}
+                                    onChange={toggleInternalNotification}
+                                />
+                                <label className="form-check-label" htmlFor="internalNotificationSwitch">
+                                    Enable MomoTalk Notifications
+                                </label>
+                            </div>
+                        </>
+                    ) : (
+                        <button
+                            className="btn btn-primary"
+                            onClick={requestNotificationPermission}
+                        >
+                            {notificationPermission === "denied"
+                                ? "Enable Notifications (Check Settings)"
+                                : "Enable Notifications"}
+                        </button>
+                    )}
+                    {notificationPermission === "denied" && (
+                        <div className="alert alert-warning d-flex align-items-center mt-3" role="alert">
+                            <div>
+                                Notifications are denied. Please enable them in your browser settings.
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* About Section */}
             <div className="card">
                 <div className="card-body">
                     <h5 className="card-title">About</h5>

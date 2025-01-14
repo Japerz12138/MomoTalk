@@ -86,17 +86,29 @@ io.on('connection', (socket) => {
         const query = 'INSERT INTO dms (sender_id, receiver_id, text, timestamp) VALUES (?, ?, ?, UTC_TIMESTAMP());';
         db.query(query, [senderId, receiverId, text], (err) => {
             if (!err) {
-                io.to(receiverId.toString()).emit('receive_message', {
-                    senderId,
-                    receiverId,
-                    text,
-                    timestamp: new Date().toISOString(), //TO UTC TIME
+                const userQuery = 'SELECT nickname, avatar FROM users WHERE id = ?';
+                db.query(userQuery, [senderId], (userErr, userResults) => {
+                    if (!userErr && userResults.length > 0) {
+                        const { nickname, avatar } = userResults[0];
+
+                        io.to(receiverId.toString()).emit('receive_message', {
+                            senderId,
+                            receiverId,
+                            text,
+                            timestamp: new Date().toISOString(), //TO UTC TIME
+                            nickname,
+                            avatar,
+                        });
+                    } else {
+                        console.error('Error fetching sender info:', userErr ? userErr.message : 'No user found');
+                    }
                 });
             } else {
                 console.error('Error saving message:', err.message);
             }
         });
     });
+
 
 
     // Listen to Friend Request
