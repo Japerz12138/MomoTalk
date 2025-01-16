@@ -33,7 +33,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
                                     style={{
                                         position: 'absolute',
                                         bottom: 0,
-                                        right: 0,
+                                        right: '7px',
                                         width: '15px',
                                         height: '15px',
                                         backgroundColor: 'green',
