@@ -208,7 +208,13 @@ function App() {
                             : friend
                     )
                 );
+
+                setMessages((prevMessages) => {
+                    const updatedMessages = [...prevMessages, message];
+                    return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                });
             });
+
 
             return () => {
                 socket.off('receive_message');
@@ -581,6 +587,12 @@ function App() {
 
             socket.emit('send_message', newMessage);
 
+            setMessages((prevMessages) => {
+                const updatedMessages = [...prevMessages, { ...newMessage, self: true }];
+                return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            });
+
+
             setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
 
             setInput('');
@@ -786,7 +798,7 @@ function App() {
                                         username: friend.username,
                                         nickname: friend.nickname,
                                         text: friend.lastMessage || 'No messages yet.',
-                                        timestamp: friend.lastMessageTime || new Date(),
+                                        timestamp: friend.lastMessageTime || friend.addedAt || null, //Add case to make time stamp null
                                         avatar: friend.avatar,
                                     }))}
                                     onSelectMessage={handleSelectFriend}

@@ -10,6 +10,8 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
     };
 
     const formatDate = (timestamp) => {
+        if (!timestamp) return ''; //IF is new chat, leave time area empty
+
         const date = new Date(timestamp);
         return (
             date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }) +
@@ -22,10 +24,13 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
         return nickname.length > 12 ? `${nickname.slice(0, 12)}...` : nickname;
     };
 
+    //Sort the message with time stamp
+    const sortedMessages = [...messages].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
     return (
         <div className="list-group" style={{ marginTop: '69px', height: 'calc(100vh - 69px)', position: 'relative' }}>
-            {messages.length > 0 ? (
-                messages.map((msg) => (
+            {sortedMessages.length > 0 ? (
+                sortedMessages.map((msg) => (
                     <div
                         key={msg.id}
                         className={`list-group-item d-flex align-items-center ${
@@ -42,9 +47,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                         />
                         <div className="flex-grow-1">
                             <div className="d-flex justify-content-between">
-                                <strong
-                                    title={msg.nickname}
-                                >
+                                <strong title={msg.nickname}>
                                     {truncateNickname(msg.nickname)}
                                     {(unreadMessagesCount[msg.id] || 0) > 0 && (
                                         <span
@@ -86,3 +89,4 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
 }
 
 export default MessageList;
+
