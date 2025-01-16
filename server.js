@@ -18,6 +18,7 @@ const DB_USER = process.env.DB_USER;
 const DB_PASSWORD = process.env.DB_PASSWORD;
 const DB_DATABASE = process.env.DB_DATABASE;
 const HOST_DOMAIN = process.env.HOST_DOMAIN;
+const onlineUsers = new Map();
 
 app.use(
     cors({
@@ -63,10 +64,32 @@ io.on('connection', (socket) => {
 
     socket.on('join_room', (userId) => {
         if (userId) {
+            onlineUsers.set(userId, socket.id); //Set socket to a user
             socket.join(userId.toString());
             console.log(`User ${userId} joined room`);
+
+            //Broadcast user online
+            notifyFriends(userId, true);
         }
     });
+
+    socket.on('disconnect', () => {
+        const userId = Array.from(onlineUsers.entries()).find(([, id]) => id === socket.id)?.[0];
+        if (userId) {
+            onlineUsers.delete(userId);
+            notifyFriends(userId, false); //Broadcast user offline
+            console.log(`User ${userId} disconnected`);
+        }
+    });
+
+    socket.on('leave_room', (userId) => {
+        if (userId) {
+            onlineUsers.delete(userId);
+            socket.leave(userId.toString());
+            console.log(`User ${userId} left room`);
+        }
+    });
+
 
     socket.on('leave_room', (userId) => {
         if (userId) {
@@ -225,6 +248,32 @@ function authenticateToken(req, res, next) {
         });
     });
 }
+
+//Broadcast function for user online status feature
+function notifyFriends(userId, isOnline) {
+    const friendsQuery = `
+        SELECT friend_id AS id FROM friends WHERE user_id = ? AND status = 'accepted'
+        UNION
+        SELECT user_id AS id FROM friends WHERE friend_id = ? AND status = 'accepted'
+    `;
+    db.query(friendsQuery, [userId, userId], (err, friends) => {
+        if (err) {
+            //console.error('Error fetching friends:', err.message);
+            return;
+        }
+
+        console.log(`Notifying friends of user ${userId} (${isOnline ? 'online' : 'offline'})`);
+        friends.forEach((friend) => {
+            //console.log(`Notifying friend ID: ${friend.id}`);
+            io.to(friend.id.toString()).emit('friend_status_update', {
+                friendId: userId,
+                isOnline,
+            });
+        });
+    });
+}
+
+
 
 // POST
 app.post('/messages', authenticateToken, (req, res) => {

@@ -39,12 +39,28 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                         onClick={() => handleSelectMessage(msg)}
                         style={{ cursor: 'pointer' }}
                     >
-                        <img
-                            src={msg.avatar || DEFAULT_AVATAR}
-                            alt={msg.nickname}
-                            className="rounded-circle me-2"
-                            style={{ width: '40px', height: '40px', objectFit: 'cover' }}
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <img
+                                src={msg.avatar || DEFAULT_AVATAR}
+                                alt={msg.nickname}
+                                className="rounded-circle me-2"
+                                style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                            />
+                            {msg.isOnline && (
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: 0,
+                                        right: 0,
+                                        width: '15px',
+                                        height: '15px',
+                                        backgroundColor: 'green',
+                                        borderRadius: '50%',
+                                        border: '3px solid white',
+                                    }}
+                                ></span>
+                            )}
+                        </div>
                         <div className="flex-grow-1">
                             <div className="d-flex justify-content-between">
                                 <strong title={msg.nickname}>
@@ -57,8 +73,8 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                                 fontSize: '0.7rem',
                                             }}
                                         >
-                                            {unreadMessagesCount[msg.id]}
-                                        </span>
+                                        {unreadMessagesCount[msg.id]}
+                                    </span>
                                     )}
                                 </strong>
                                 <small>{formatDate(msg.timestamp)}</small>
@@ -86,6 +102,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
             )}
         </div>
     );
+
 }
 
 export default MessageList;

@@ -264,6 +264,24 @@ function App() {
         }
     }, [socketInstance]);
 
+    //User online status
+    useEffect(() => {
+        socket.on('friend_status_update', ({ friendId, isOnline }) => {
+            setFriends((prevFriends) =>
+                prevFriends.map((friend) =>
+                    friend.id === friendId && friend.isOnline !== isOnline //Prevent Loop respones
+                        ? { ...friend, isOnline }
+                        : friend
+                )
+            );
+        });
+
+        return () => {
+            socket.off('friend_status_update');
+        };
+    }, []);
+
+
     useEffect(() => {
         if (activeSection === 'friend-list') {
             fetchFriends();
@@ -800,6 +818,7 @@ function App() {
                                         text: friend.lastMessage || 'No messages yet.',
                                         timestamp: friend.lastMessageTime || friend.addedAt || null, //Add case to make time stamp null
                                         avatar: friend.avatar,
+                                        isOnline: friend.isOnline,
                                     }))}
                                     onSelectMessage={handleSelectFriend}
                                     unreadMessagesCount={unreadMessagesCount}

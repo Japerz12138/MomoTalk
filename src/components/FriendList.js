@@ -21,12 +21,28 @@ const FriendList = ({ friends, onSelectFriend }) => {
                         }`}
                         onClick={() => handleSelectFriend(friend)}
                     >
-                        <img
-                            src={friend.avatar || DEFAULT_AVATAR}
-                            alt={friend.nickname || friend.username}
-                            className="rounded-circle me-2"
-                            style={{ width: '40px', height: '40px', objectFit: 'cover' }}
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <img
+                                src={friend.avatar || DEFAULT_AVATAR}
+                                alt={friend.nickname || friend.username}
+                                className="rounded-circle me-2"
+                                style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                            />
+                            {friend.isOnline && (
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: 0,
+                                        right: 0,
+                                        width: '15px',
+                                        height: '15px',
+                                        backgroundColor: 'green',
+                                        borderRadius: '50%',
+                                        border: '3px solid white',
+                                    }}
+                                ></span>
+                            )}
+                        </div>
                         <div className="flex-grow-1 text-start">
                             <strong>{friend.nickname || friend.username}</strong>
                         </div>
@@ -49,6 +65,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
             )}
         </div>
     );
+
 };
 
 export default FriendList;
