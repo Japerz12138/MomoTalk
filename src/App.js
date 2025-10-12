@@ -78,6 +78,7 @@ function App() {
         if (savedNickname) setNickname(savedNickname);
         if (savedUserId) setUserId(parseInt(savedUserId, 10));
         if (savedAvatar) setAvatar(savedAvatar);
+        else setAvatar(DEFAULT_AVATAR);
     }, []);
 
     useEffect(() => {
@@ -386,13 +387,13 @@ function App() {
             setUsername(loggedInUsername);
             setNickname(loggedInNickname);
             setUserId(loggedInUserId);
-            setAvatar(avatar);
+            setAvatar(avatar || DEFAULT_AVATAR);
 
             localStorage.setItem('token', token);
             localStorage.setItem('username', loggedInUsername);
             localStorage.setItem('nickname', loggedInNickname);
             localStorage.setItem('userId', loggedInUserId);
-            localStorage.setItem('avatar', avatar);
+            localStorage.setItem('avatar', avatar || DEFAULT_AVATAR);
 
             //init socket for current user
             const newSocket = initializeSocket(loggedInUserId);
@@ -898,9 +899,9 @@ function App() {
                                             );
                                             alert(response.data.message);
                                             setNickname(nickname);
-                                            setAvatar(updatedAvatar);
+                                            setAvatar(updatedAvatar || DEFAULT_AVATAR);
                                             localStorage.setItem('nickname', nickname);
-                                            localStorage.setItem('avatar', updatedAvatar);
+                                            localStorage.setItem('avatar', updatedAvatar || DEFAULT_AVATAR);
                                         } catch (error) {
                                             console.error('Error updating profile:', error.response?.data || error.message);
                                             alert('Failed to update profile.');

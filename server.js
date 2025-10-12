@@ -1,62 +1,76 @@
 require('dotenv').config();
 const express = require('express');
-const mysql = require('mysql2');
+const http = require('http');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const http = require('http');
-const { Server } = require('socket.io');
 const crypto = require('crypto');
+const mysql = require('mysql2');
+const { Server } = require('socket.io');
 
-// Init Express
-const app = express();
-const PORT = 5000;
+// Server configuration
+const PORT = process.env.PORT || 5000;
+const HOST_DOMAIN = process.env.HOST_DOMAIN || 'http://localhost:3000';
+
 const SECRET_KEY = process.env.SECRET_KEY;
-const DB_HOST = process.env.DB_HOST;
-const DB_USER = process.env.DB_USER;
-const DB_PASSWORD = process.env.DB_PASSWORD;
-const DB_DATABASE = process.env.DB_DATABASE;
-const HOST_DOMAIN = process.env.HOST_DOMAIN;
-const onlineUsers = new Map();
+if (!SECRET_KEY) {
+    console.error('SECRET_KEY environment variable is required');
+    process.exit(1);
+}
 
-app.use(
-    cors({
-        origin: HOST_DOMAIN,
-        methods: ["GET", "POST"],
-        credentials: true,
-    })
-);
-
-app.use(bodyParser.json());
-
-const db = mysql.createPool({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: DB_DATABASE,
+const DB_CONFIG = {
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-});
+    acquireTimeout: 60000,
+    timeout: 60000,
+    reconnect: true
+};
+
+if (!DB_CONFIG.user || !DB_CONFIG.password || !DB_CONFIG.database) {
+    console.error('Database configuration is incomplete. Please check your environment variables.');
+    process.exit(1);
+}
+
+const app = express();
+const onlineUsers = new Map();
+
+// Middleware configuration
+app.use(cors({
+    origin: HOST_DOMAIN,
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Database connection
+const db = mysql.createPool(DB_CONFIG);
 
 db.getConnection((err, connection) => {
     if (err) {
         console.error('Error connecting to the database:', err.message);
+        process.exit(1);
     } else {
         console.log('Connected to the database');
         connection.release();
     }
 });
 
-// Socket.io Instance
+// Socket.io configuration
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
         origin: HOST_DOMAIN,
         methods: ['GET', 'POST'],
-        credentials: true,
-    },
+        credentials: true
+    }
 });
 
 io.on('connection', (socket) => {
@@ -85,14 +99,6 @@ io.on('connection', (socket) => {
     socket.on('leave_room', (userId) => {
         if (userId) {
             onlineUsers.delete(userId);
-            socket.leave(userId.toString());
-            console.log(`User ${userId} left room`);
-        }
-    });
-
-
-    socket.on('leave_room', (userId) => {
-        if (userId) {
             socket.leave(userId.toString());
             console.log(`User ${userId} left room`);
         }
@@ -134,16 +140,15 @@ io.on('connection', (socket) => {
 
 
 
-    // Listen to Friend Request
+    // Handle friend request events
     socket.on('send_friend_request', ({ senderId, receiverId, senderUsername }) => {
         console.log(`Friend request sent from ${senderId} to ${receiverId}`);
         io.to(receiverId.toString()).emit('receive_friend_request', {
             senderId,
-            senderUsername,
+            senderUsername
         });
     });
 
-    // Listen for response of the friend requests
     socket.on('respond_friend_request', ({ senderId, receiverId, action }) => {
         console.log(`Friend request ${action} by ${receiverId}`);
         io.to(senderId.toString()).emit('friend_request_responded', { receiverId, action });
@@ -152,17 +157,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
-        socket.removeAllListeners();
-    });
 });
 
 app.get('/api', (req, res) => {
     res.json({ message: 'Hello from momotalk api!' });
 });
 
-// ROUTERS
+// API ROUTERS
 app.post('/register', async (req, res) => {
     const { username, email, password, nickname } = req.body;
 
@@ -249,25 +250,25 @@ function authenticateToken(req, res, next) {
     });
 }
 
-//Broadcast function for user online status feature
+// Helper function to notify friends about online status changes
 function notifyFriends(userId, isOnline) {
     const friendsQuery = `
         SELECT friend_id AS id FROM friends WHERE user_id = ? AND status = 'accepted'
         UNION
         SELECT user_id AS id FROM friends WHERE friend_id = ? AND status = 'accepted'
     `;
+    
     db.query(friendsQuery, [userId, userId], (err, friends) => {
         if (err) {
-            //console.error('Error fetching friends:', err.message);
+            console.error('Error fetching friends for status notification:', err.message);
             return;
         }
 
         console.log(`Notifying friends of user ${userId} (${isOnline ? 'online' : 'offline'})`);
         friends.forEach((friend) => {
-            //console.log(`Notifying friend ID: ${friend.id}`);
             io.to(friend.id.toString()).emit('friend_status_update', {
                 friendId: userId,
-                isOnline,
+                isOnline
             });
         });
     });
@@ -304,6 +305,7 @@ app.get('/messages', authenticateToken, (req, res) => {
     });
 });
 
+// Friend management routes
 app.get('/friends', authenticateToken, (req, res) => {
     const userId = req.user.userId;
 
@@ -551,6 +553,7 @@ app.post('/friend/remove', authenticateToken, (req, res) => {
     });
 });
 
+// Direct message routes
 app.post('/dm/send', authenticateToken, (req, res) => {
     const { receiverId, text } = req.body;
     const senderId = req.user.userId;
@@ -589,6 +592,7 @@ app.get('/protected-resource', authenticateToken, (req, res) => {
     res.json({ message: 'Welcome, admin!' });
 });
 
+// User search routes
 app.get('/users/search', authenticateToken, (req, res) => {
     const { query } = req.query;
     if (!query) return res.status(400).json({ error: 'Query parameter is required.' });
@@ -611,7 +615,7 @@ app.post('/dm/delete', authenticateToken, (req, res) => {
     });
 });
 
-//Clean Friend Request!
+// Utility functions
 const cleanExpiredRequests = () => {
     const deleteQuery = `
         DELETE FROM friends
@@ -627,13 +631,12 @@ const cleanExpiredRequests = () => {
     });
 };
 
-setInterval(cleanExpiredRequests, 24 * 60 * 60 * 1000);
-
+// Server startup
 server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
-
     console.log('Initializing cleanup for expired friend requests...');
+    
+    // Initial cleanup and setup recurring cleanup
     cleanExpiredRequests();
+    setInterval(cleanExpiredRequests, 24 * 60 * 60 * 1000); // Run daily
 });
-
-setInterval(cleanExpiredRequests, 24 * 60 * 60 * 1000);
