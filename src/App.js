@@ -51,7 +51,38 @@ function App() {
         JSON.parse(localStorage.getItem('unreadMessagesCount')) || {}
     );
     const [showNotificationModal, setShowNotificationModal] = useState(false);
+    
+    // Mobile-specific states
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
+    // Handle window resize for mobile detection
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth <= 768);
+            if (window.innerWidth > 768) {
+                setSidebarOpen(false);
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Set CSS variable for header height
+    useEffect(() => {
+        const updateHeaderHeight = () => {
+            const header = document.getElementById('main-header');
+            if (header) {
+                const height = header.offsetHeight;
+                document.documentElement.style.setProperty('--header-height', `${height}px`);
+            }
+        };
+
+        updateHeaderHeight();
+        window.addEventListener('resize', updateHeaderHeight);
+        return () => window.removeEventListener('resize', updateHeaderHeight);
+    }, []);
 
     useEffect(() => {
         if (token) {
@@ -104,10 +135,8 @@ function App() {
             }
         );
 
-
         return () => axios.interceptors.response.eject(interceptor);
     }, []);
-
 
     useEffect(() => {
         if (token && username) {
@@ -138,7 +167,6 @@ function App() {
                     return isDuplicate ? prevDms : [...prevDms, updatedMessage];
                 });
             });
-
 
             socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
                 fetchFriendRequests();
@@ -214,14 +242,11 @@ function App() {
                 });
             });
 
-
             return () => {
                 socket.off('receive_message');
             };
         }
     }, [userId, selectedFriend, friends]);
-
-
 
     useEffect(() => {
         socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
@@ -279,7 +304,6 @@ function App() {
             socket.off('friend_status_update');
         };
     }, []);
-
 
     useEffect(() => {
         if (activeSection === 'friend-list') {
@@ -362,6 +386,23 @@ function App() {
         setIsAutoMode((prev) => !prev);
     };
 
+    // Mobile event handlers
+    const toggleSidebar = () => {
+        setSidebarOpen(!sidebarOpen);
+    };
+
+    const closeSidebar = () => {
+        setSidebarOpen(false);
+    };
+
+    // Handle friend selection for mobile
+    const handleSelectFriendMobile = (friend) => {
+        handleSelectFriend(friend);
+        if (isMobile) {
+            setSidebarOpen(false);
+        }
+    };
+
     const fetchFriends = async () => {
         if (!token) return;
         try {
@@ -405,8 +446,6 @@ function App() {
             console.error('Login error:', error.response ? error.response.data : error);
         }
     };
-
-
 
     const handleRegister = async (e) => {
         e.preventDefault();
@@ -546,7 +585,6 @@ function App() {
             return updated;
         });
 
-
         try {
             setSelectedFriend(friend);
             const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/dm/${friend.id}`, {
@@ -569,8 +607,6 @@ function App() {
             }
         }
     };
-
-
 
     const sendMessage = async (e) => {
         e.preventDefault();
@@ -609,7 +645,6 @@ function App() {
                 return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             });
 
-
             setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
 
             setInput('');
@@ -626,7 +661,6 @@ function App() {
                         : friend
                 )
             );
-
         }
     };
 
@@ -729,7 +763,6 @@ function App() {
         }
     };
 
-
     return (
         <div style={styles.container}>
             <ToastContainer ref={toastRef} />
@@ -790,146 +823,337 @@ function App() {
                 )
             ) : (
                 <>
-                    <div style={{display: 'flex', height: '100vh'}}>
-                        <Sidebar
-                            activeSection={activeSection}
-                            onSectionChange={handleSectionChange}
-                            onLogout={handleLogout}
-                            nickname={nickname}
-                            username={username}
-                            avatar={avatar}
-                        />
+                    {/* Mobile Layout */}
+                    {isMobile ? (
+                        <div className="mobile-app-container">
+                            {/* Mobile Menu Button */}
+                            <button 
+                                className="mobile-menu-btn btn btn-outline-secondary"
+                                onClick={toggleSidebar}
+                                style={{
+                                    position: 'fixed',
+                                    bottom: '15px',
+                                    left: '15px',
+                                    zIndex: 1050,
+                                    borderRadius: '12px',
+                                    width: '48px',
+                                    height: '48px',
+                                    padding: '0',
+                                    backgroundColor: 'white',
+                                    border: '1px solid #dee2e6',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                }}
+                            >
+                                <i className="bi bi-list" style={{ fontSize: '1.2rem' }}></i>
+                            </button>
 
-                        <div
-                            style={{
-                                width: '300px',
-                                backgroundColor: '#ffffff',
-                                overflowY: 'auto',
-                                flexShrink: 0,
-                            }}
-                        >
-                            {activeSection === 'chat' && (
-                                <MessageList
-                                    messages={friends.map(friend => ({
-                                        id: friend.id,
-                                        username: friend.username,
-                                        nickname: friend.nickname,
-                                        text: friend.lastMessage || 'No messages yet.',
-                                        timestamp: friend.lastMessageTime || friend.addedAt || null, //Add case to make time stamp null
-                                        avatar: friend.avatar,
-                                        isOnline: friend.isOnline,
-                                    }))}
-                                    onSelectMessage={handleSelectFriend}
-                                    unreadMessagesCount={unreadMessagesCount}
-                                />
-
-                            )}
-
-                            {activeSection === 'friend-list' && (
-                                <FriendList
-                                    friends={friends}
-                                    onSelectFriend={(friend) => {
-                                        handleSelectFriend(friend);
+                            {/* Sidebar Overlay */}
+                            {sidebarOpen && (
+                                <div 
+                                    className="sidebar-overlay"
+                                    onClick={closeSidebar}
+                                    style={{
+                                        position: 'fixed',
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        backgroundColor: 'rgba(0,0,0,0.5)',
+                                        zIndex: 1040
                                     }}
                                 />
-
                             )}
-                            {activeSection === 'add-friend' && (
-                                <>
-                                    <FriendRequests
-                                        friendRequests={friendRequests}
-                                        onRespond={respondToFriendRequest}
-                                    />
-                                    <SearchAndAddFriend
-                                        token={token}
-                                        loggedInUsername={username}
-                                        friendsList={friends}
-                                        onAddFriend={handleAddFriend}
-                                    />
-                                </>
-                            )}
-                        </div>
 
-                        <div
-                            style={{
-                                flex: 2,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                backgroundColor: '#fff',
-                            }}
-                        >
-                            {activeSection === 'chat' && selectedFriend && (
-                                <>
+                            {/* Mobile Sidebar */}
+                            <div 
+                                className={`mobile-sidebar ${sidebarOpen ? 'show' : ''}`}
+                                style={{
+                                    position: 'fixed',
+                                    top: 0,
+                                    left: sidebarOpen ? '0' : '-280px',
+                                    width: '280px',
+                                    height: '100vh',
+                                    backgroundColor: '#495A6E',
+                                    zIndex: 1050,
+                                    transition: 'left 0.3s ease',
+                                    overflowY: 'auto'
+                                }}
+                            >
+                                <Sidebar
+                                    activeSection={activeSection}
+                                    onSectionChange={handleSectionChange}
+                                    onLogout={handleLogout}
+                                    nickname={nickname}
+                                    username={username}
+                                    avatar={avatar}
+                                    isMobile={true}
+                                />
+                            </div>
+
+                            {/* Main Content */}
+                            <div className="mobile-main-content" style={{ height: '100vh', overflow: 'hidden' }}>
+                                {activeSection === 'chat' && (
+                                    <div className="mobile-chat-list" style={{ height: '100%', overflow: 'auto' }}>
+                                        <MessageList
+                                            messages={friends.map(friend => ({
+                                                id: friend.id,
+                                                username: friend.username,
+                                                nickname: friend.nickname,
+                                                text: friend.lastMessage || 'No messages yet.',
+                                                timestamp: friend.lastMessageTime || friend.addedAt || null,
+                                                avatar: friend.avatar,
+                                                isOnline: friend.isOnline,
+                                            }))}
+                                            onSelectMessage={handleSelectFriendMobile}
+                                            unreadMessagesCount={unreadMessagesCount}
+                                            isMobile={true}
+                                        />
+                                    </div>
+                                )}
+
+                                {activeSection === 'friend-list' && (
+                                    <div className="mobile-friend-list" style={{ height: '100%', overflow: 'auto' }}>
+                                        <FriendList
+                                            friends={friends}
+                                            onSelectFriend={handleSelectFriendMobile}
+                                            isMobile={true}
+                                        />
+                                    </div>
+                                )}
+
+                                {activeSection === 'add-friend' && (
+                                    <div style={{ height: '100%', overflow: 'auto', padding: '16px' }}>
+                                        <FriendRequests
+                                            friendRequests={friendRequests}
+                                            onRespond={respondToFriendRequest}
+                                            isMobile={true}
+                                        />
+                                        <SearchAndAddFriend
+                                            onAddFriend={handleAddFriend}
+                                            isMobile={true}
+                                        />
+                                    </div>
+                                )}
+
+                                {activeSection === 'settings' && (
+                                    <div style={{ height: '100%', overflow: 'auto', padding: '16px' }}>
+                                        <SettingsPage
+                                            nickname={nickname}
+                                            avatar={avatar}
+                                            isDarkMode={isDarkMode}
+                                            isAutoMode={isAutoMode}
+                                            onUpdatePassword={handleUpdatePassword}
+                                            onToggleDarkMode={toggleDarkMode}
+                                            onToggleAutoMode={toggleAutoMode}
+                                            onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
+                                                try {
+                                                    const response = await axios.post(
+                                                        `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
+                                                        { nickname, avatar: newAvatar },
+                                                        { headers: { Authorization: `Bearer ${token}` } }
+                                                    );
+                                                    alert(response.data.message);
+                                                    setNickname(nickname);
+                                                    setAvatar(newAvatar || DEFAULT_AVATAR);
+                                                    localStorage.setItem('nickname', nickname);
+                                                    localStorage.setItem('avatar', newAvatar || DEFAULT_AVATAR);
+                                                } catch (error) {
+                                                    console.error('Error updating profile:', error.response?.data || error.message);
+                                                    alert('Failed to update profile.');
+                                                }
+                                            }}
+                                            isMobile={true}
+                                        />
+                                    </div>
+                                )}
+
+                                {activeSection === 'profile' && (
+                                    <div style={{ height: '100%', overflow: 'auto' }}>
+                                        <UserProfile
+                                            user={{ username, nickname, avatar }}
+                                            isOwnProfile={true}
+                                            onClose={() => setActiveSection('chat')}
+                                            onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
+                                                try {
+                                                    const response = await axios.post(
+                                                        `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
+                                                        { nickname, avatar: newAvatar },
+                                                        { headers: { Authorization: `Bearer ${token}` } }
+                                                    );
+                                                    alert(response.data.message);
+                                                    setNickname(nickname);
+                                                    setAvatar(newAvatar || DEFAULT_AVATAR);
+                                                    localStorage.setItem('nickname', nickname);
+                                                    localStorage.setItem('avatar', newAvatar || DEFAULT_AVATAR);
+                                                } catch (error) {
+                                                    console.error('Error updating profile:', error.response?.data || error.message);
+                                                    alert('Failed to update profile.');
+                                                }
+                                            }}
+                                            isMobile={true}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Chat Container for Mobile */}
+                            {selectedFriend && (
+                                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1100, background: 'white' }}>
                                     <ChatContainer
-                                        messages={selectedFriend ? dms : []}
-                                        currentChat={selectedFriend ? selectedFriend.nickname : 'Select a conversation'}
-                                    />
-                                    <MessageInput
+                                        friend={selectedFriend}
+                                        messages={dms}
+                                        onDeleteDMs={handleDeleteDMs}
+                                        userId={userId}
+                                        socket={socketInstance}
+                                        onBack={() => setSelectedFriend(null)}
+                                        isMobile={true}
                                         input={input}
                                         onInputChange={(e) => setInput(e.target.value)}
-                                        onSendMessage={selectedFriend ? handleSendDM : null}
+                                        onSendMessage={handleSendDM}
                                     />
-                                </>
+                                </div>
                             )}
-                            {activeSection === 'friend-list' && selectedFriend && (
-                                <UserProfile
-                                    user={selectedFriend}
-                                    isOwnProfile={false}
-                                    onSendMessage={() => {
-                                        setActiveSection('chat');
-                                        handleSelectFriend(selectedFriend);
-                                    }}
-                                    onRemoveFriend={() => {
-                                        handleRemoveFriend(selectedFriend.id);
-                                        setSelectedFriend(null);
-                                    }}
-                                />
-                            )}
-                            {activeSection === 'profile' && (
-                                <UserProfile
-                                    user={{ username, nickname, avatar }}
-                                    isOwnProfile={true}
-                                    onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
-                                        const updatedAvatar = newAvatar || avatar; // IF no new avatar, use the current one
-                                        try {
-                                            const response = await axios.post(
-                                                `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
-                                                { nickname, avatar: updatedAvatar },
-                                                { headers: { Authorization: `Bearer ${token}` } }
-                                            );
-                                            alert(response.data.message);
-                                            setNickname(nickname);
-                                            setAvatar(updatedAvatar || DEFAULT_AVATAR);
-                                            localStorage.setItem('nickname', nickname);
-                                            localStorage.setItem('avatar', updatedAvatar || DEFAULT_AVATAR);
-                                        } catch (error) {
-                                            console.error('Error updating profile:', error.response?.data || error.message);
-                                            alert('Failed to update profile.');
-                                        }
-                                    }}
-                                    onClose={() => setActiveSection('chat')}
-                                />
-
-                            )}
-                            {activeSection === 'settings' && (
-                                <SettingsPage
-                                    onUpdatePassword={handleUpdatePassword}
-                                    isDarkMode={isDarkMode}
-                                    isAutoMode={isAutoMode}
-                                    onToggleDarkMode={toggleDarkMode}
-                                    onToggleAutoMode={toggleAutoMode}
-                                />
-                            )}
-
                         </div>
-                    </div>
+                    ) : (
+                        /* Desktop Layout */
+                        <div style={{display: 'flex', height: '100vh'}}>
+                            <Sidebar
+                                activeSection={activeSection}
+                                onSectionChange={handleSectionChange}
+                                onLogout={handleLogout}
+                                nickname={nickname}
+                                username={username}
+                                avatar={avatar}
+                            />
 
+                            <div
+                                style={{
+                                    width: '300px',
+                                    backgroundColor: '#ffffff',
+                                    overflowY: 'auto',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                {activeSection === 'chat' && (
+                                    <MessageList
+                                        messages={friends.map(friend => ({
+                                            id: friend.id,
+                                            username: friend.username,
+                                            nickname: friend.nickname,
+                                            text: friend.lastMessage || 'No messages yet.',
+                                            timestamp: friend.lastMessageTime || friend.addedAt || null,
+                                            avatar: friend.avatar,
+                                            isOnline: friend.isOnline,
+                                        }))}
+                                        onSelectMessage={handleSelectFriend}
+                                        unreadMessagesCount={unreadMessagesCount}
+                                    />
+                                )}
 
+                                {activeSection === 'friend-list' && (
+                                    <FriendList
+                                        friends={friends}
+                                        onSelectFriend={(friend) => {
+                                            handleSelectFriend(friend);
+                                        }}
+                                    />
+                                )}
+
+                                {activeSection === 'add-friend' && (
+                                    <>
+                                        <FriendRequests
+                                            friendRequests={friendRequests}
+                                            onRespond={respondToFriendRequest}
+                                        />
+                                        <SearchAndAddFriend
+                                            token={token}
+                                            loggedInUsername={username}
+                                            friendsList={friends}
+                                            onAddFriend={handleAddFriend}
+                                        />
+                                    </>
+                                )}
+                            </div>
+
+                            <div
+                                style={{
+                                    flex: 2,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    backgroundColor: '#fff',
+                                }}
+                            >
+                                {activeSection === 'chat' && selectedFriend && (
+                                    <>
+                                        <ChatContainer
+                                            messages={selectedFriend ? dms : []}
+                                            currentChat={selectedFriend ? selectedFriend.nickname : 'Select a conversation'}
+                                            friend={selectedFriend}
+                                            isMobile={false}
+                                        />
+                                        <MessageInput
+                                            input={input}
+                                            onInputChange={(e) => setInput(e.target.value)}
+                                            onSendMessage={selectedFriend ? handleSendDM : null}
+                                            isMobile={false}
+                                        />
+                                    </>
+                                )}
+                                {activeSection === 'friend-list' && selectedFriend && (
+                                    <UserProfile
+                                        user={selectedFriend}
+                                        isOwnProfile={false}
+                                        onSendMessage={() => {
+                                            setActiveSection('chat');
+                                            handleSelectFriend(selectedFriend);
+                                        }}
+                                        onRemoveFriend={() => {
+                                            handleRemoveFriend(selectedFriend.id);
+                                            setSelectedFriend(null);
+                                        }}
+                                    />
+                                )}
+                                {activeSection === 'profile' && (
+                                    <UserProfile
+                                        user={{ username, nickname, avatar }}
+                                        isOwnProfile={true}
+                                        onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
+                                            const updatedAvatar = newAvatar || avatar;
+                                            try {
+                                                const response = await axios.post(
+                                                    `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
+                                                    { nickname, avatar: updatedAvatar },
+                                                    { headers: { Authorization: `Bearer ${token}` } }
+                                                );
+                                                alert(response.data.message);
+                                                setNickname(nickname);
+                                                setAvatar(updatedAvatar || DEFAULT_AVATAR);
+                                                localStorage.setItem('nickname', nickname);
+                                                localStorage.setItem('avatar', updatedAvatar || DEFAULT_AVATAR);
+                                            } catch (error) {
+                                                console.error('Error updating profile:', error.response?.data || error.message);
+                                                alert('Failed to update profile.');
+                                            }
+                                        }}
+                                        onClose={() => setActiveSection('chat')}
+                                    />
+                                )}
+                                {activeSection === 'settings' && (
+                                    <SettingsPage
+                                        onUpdatePassword={handleUpdatePassword}
+                                        isDarkMode={isDarkMode}
+                                        isAutoMode={isAutoMode}
+                                        onToggleDarkMode={toggleDarkMode}
+                                        onToggleAutoMode={toggleAutoMode}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
         </div>
     );
-
 }
 
 export default App;

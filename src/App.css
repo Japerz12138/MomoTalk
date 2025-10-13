@@ -1,3 +1,7 @@
+:root {
+  --header-height: 69px; /* Default header height */
+}
+
 html, body {
   overflow: auto;
   height: 100%;
@@ -208,5 +212,328 @@ html, body {
 
 .bg-danger {
   background-color: #dc3545 !important;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  /* Mobile header adjustments */
+  header.fixed-top {
+    padding: 16px !important;
+  }
+  
+  header.fixed-top .brand-title {
+    margin-bottom: 0 !important;
+  }
+  
+  header.fixed-top .brand-title .fs-4 {
+    font-size: 1.25rem !important;
+  }
+  
+  header.fixed-top svg {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  
+  .mobile-app-container {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .mobile-menu-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 1040;
+  }
+
+  .mobile-sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    width: 280px;
+    height: 100vh;
+    background-color: #495A6E;
+    z-index: 1050;
+    transition: left 0.3s ease;
+    overflow-y: auto;
+  }
+
+  .mobile-sidebar.show {
+    left: 0;
+  }
+
+  .mobile-main-content {
+    height: 100vh;
+    overflow: hidden;
+    padding-top: 0; /* Remove top padding */
+  }
+
+  .mobile-chat-list,
+  .mobile-friend-list {
+    height: 100%;
+    overflow: auto;
+    padding: 8px 0 8px 12px; /* Add left padding and reduce top/bottom padding */
+  }
+  
+  .mobile-chat-list .list-group,
+  .mobile-friend-list .list-group {
+    padding-right: 12px; /* Balance the right side */
+  }
+
+  /* Mobile chat input */
+  .chat-input {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    padding: 10px !important;
+    background: #fff !important;
+    box-shadow: 0px -2px 5px rgba(0, 0, 0, 0.1) !important;
+    z-index: 1000 !important;
+  }
+
+  /* Mobile chat container */
+  .chat-container {
+    height: calc(100vh - 120px) !important;
+    overflow-y: auto;
+    padding-bottom: 70px;
+  }
+
+  /* Mobile message bubbles */
+  .chat-bubble {
+    max-width: 85% !important;
+    margin: 8px 0 !important;
+  }
+
+  /* Mobile list items */
+  .list-group-item {
+    padding: 12px 16px !important;
+  }
+
+  /* Mobile buttons */
+  .btn {
+    min-height: 44px; /* Touch-friendly size */
+  }
+
+  /* Mobile forms */
+  .form-control {
+    min-height: 44px;
+  }
+
+  /* Hide desktop-only elements */
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* Mobile-specific spacing */
+  .mobile-p-3 {
+    padding: 1rem !important;
+  }
+
+  .mobile-mb-3 {
+    margin-bottom: 1rem !important;
+  }
+}
+
+/* Mobile sidebar content */
+.mobile-sidebar-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-sidebar-content .nav-link {
+  padding: 15px 20px !important;
+  text-align: left !important;
+  display: flex !important;
+  align-items: center !important;
+  color: #A6ACB8 !important;
+  text-decoration: none !important;
+  transition: all 0.2s ease;
+}
+
+.mobile-sidebar-content .nav-link:hover {
+  color: #FFFFFF !important;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.mobile-sidebar-content .nav-link.active {
+  background-color: #65778D !important;
+  color: #FFFFFF !important;
+}
+
+.mobile-sidebar-content .nav-link i {
+  margin-right: 15px;
+  width: 20px;
+  height: 20px;
+  font-size: 1.1rem;
+}
+
+.mobile-sidebar-content .nav-link span {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+/* Mobile chat header */
+.mobile-chat-header {
+  background: white;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* Mobile chat container */
+.mobile-chat-container {
+  padding-bottom: 0;
+}
+
+/* Mobile chat input */
+.mobile-chat-input {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  background: white !important;
+  border-top: 1px solid #dee2e6 !important;
+  z-index: 1000 !important;
+}
+
+/* Mobile menu button improvements */
+.mobile-menu-btn {
+  background: white !important;
+  border: 1px solid #dee2e6 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+  border-radius: 12px !important;
+  width: 48px !important;
+  height: 48px !important;
+  position: fixed !important;
+  bottom: 15px !important;
+  left: 15px !important;
+  z-index: 1050 !important;
+}
+
+.mobile-menu-btn:hover {
+  background: #f8f9fa !important;
+  border-color: #adb5bd !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2) !important;
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+}
+
+/* Desktop sidebar icon improvements */
+@media (min-width: 769px) {
+  .sidebar .nav-link i {
+    font-size: 1.5rem !important;
+  }
+  
+  .sidebar .nav-link {
+    padding: 1rem 0.75rem !important;
+  }
+}
+
+/* Mobile dropdown menu positioning */
+@media (max-width: 768px) {
+  .mobile-sidebar-content .dropdown-menu {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: auto !important;
+    min-width: 200px !important;
+    margin-top: 0.5rem !important;
+  }
+}
+
+/* Touch-friendly improvements */
+@media (max-width: 768px) {
+  .list-group-item {
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+  }
+
+  .list-group-item img {
+    margin-right: 12px;
+  }
+
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+  }
+
+  /* Improve form controls */
+  .form-control,
+  .form-select {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 12px 16px;
+  }
+
+  /* Better button spacing */
+  .btn-group .btn {
+    padding: 8px 16px;
+  }
+
+  /* Modal improvements */
+  .modal-dialog {
+    margin: 0.5rem;
+    max-width: calc(100% - 1rem);
+  }
+
+  .modal-content {
+    border-radius: 0.5rem;
+  }
+}
+
+/* Desktop-only styles */
+@media (min-width: 769px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
+
+/* Mobile bottom sheet animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Mobile bottom sheet styles */
+.mobile-bottom-sheet .list-group-item {
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.mobile-bottom-sheet .list-group-item:hover {
+  background-color: #f8f9fa;
+}
+
+.mobile-bottom-sheet .list-group-item:active {
+  background-color: #e9ecef;
 }
 

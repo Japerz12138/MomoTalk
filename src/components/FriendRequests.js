@@ -2,7 +2,7 @@ import React from 'react';
 
 function FriendRequests({ friendRequests, onRespond }) {
     return (
-        <div className="p-3 bg-light border rounded" style={{ marginTop: '69px' }}>
+        <div className="p-3 bg-light border rounded" style={{ marginTop: 'var(--header-height, 69px)' }}>
             {friendRequests.length === 0 ? (
                 <div className="text-center text-muted" style={{ marginTop: '5px' }}>
                     <i className="bi bi-envelope-open" style={{ fontSize: '1.2rem', marginBottom: '10px' }}></i>

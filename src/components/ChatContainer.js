@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DEFAULT_AVATAR } from '../constants';
+import MessageInput from './MessageInput';
 
-const ChatContainer = ({ messages, currentChat }) => {
+const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage }) => {
     const chatEndRef = useRef(null);
     const [hoveredMessageIndex, setHoveredMessageIndex] = useState(null);
 
@@ -21,11 +22,39 @@ const ChatContainer = ({ messages, currentChat }) => {
     };
 
     return (
-        <div
-            className="chat-container p-3"
-            style={{ marginTop: '69px', overflowY: 'auto', height: 'calc(100vh - 150px)' }}
-        >
-            <h5 className="text-center text-muted mb-3">{'Chat with ' + currentChat || 'Select a conversation'}</h5>
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+            <div
+                className={`chat-container p-3 ${isMobile ? 'mobile-chat-container' : ''}`}
+            style={{ 
+                marginTop: isMobile ? '0' : 'var(--header-height, 69px)', 
+                overflowY: 'auto', 
+                flex: 1,
+                paddingBottom: isMobile ? '80px' : '10px'
+            }}
+            >
+            {isMobile && (
+                <div className="mobile-chat-header d-flex align-items-center mb-3 p-2 border-bottom">
+                    <button 
+                        className="btn btn-link p-0 me-2" 
+                        onClick={onBack}
+                        style={{ fontSize: '1.2rem' }}
+                    >
+                        <i className="bi bi-arrow-left"></i>
+                    </button>
+                    <img
+                        src={friend?.avatar || DEFAULT_AVATAR}
+                        alt="avatar"
+                        width="32"
+                        height="32"
+                        className="rounded-circle me-2"
+                        style={{ objectFit: 'cover' }}
+                    />
+                    <h6 className="mb-0">{friend?.nickname || 'Unknown'}</h6>
+                </div>
+            )}
+            {!isMobile && (
+                <h5 className="text-center text-muted mb-3">{'Chat with ' + currentChat || 'Select a conversation'}</h5>
+            )}
             {messages.length > 0 ? (
                 messages.map((message, index) => (
                     <div
@@ -76,7 +105,18 @@ const ChatContainer = ({ messages, currentChat }) => {
                 </div>
             )}
 
-            <div ref={chatEndRef}></div>
+                <div ref={chatEndRef}></div>
+            </div>
+            
+            {/* Message Input for Mobile */}
+            {isMobile && (
+                <MessageInput
+                    input={input}
+                    onInputChange={onInputChange}
+                    onSendMessage={onSendMessage}
+                    isMobile={true}
+                />
+            )}
         </div>
     );
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const MessageInput = ({ input, onInputChange, onSendMessage }) => {
+const MessageInput = ({ input, onInputChange, onSendMessage, isMobile }) => {
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && onSendMessage) {
@@ -9,7 +9,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage }) => {
     };
 
     return (
-        <div className="chat-input">
+        <div className={`chat-input ${isMobile ? 'mobile-chat-input' : ''}`}>
             <div className="input-group">
                 <input
                     type="text"

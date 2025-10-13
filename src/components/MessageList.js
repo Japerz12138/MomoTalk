@@ -28,7 +28,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
     const sortedMessages = [...messages].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
     return (
-        <div className="list-group" style={{ marginTop: '69px', height: 'calc(100vh - 69px)', position: 'relative' }}>
+        <div className="list-group" style={{ marginTop: 'var(--header-height, 69px)', height: 'calc(100vh - var(--header-height, 69px))', position: 'relative' }}>
             {sortedMessages.length > 0 ? (
                 sortedMessages.map((msg) => (
                     <div

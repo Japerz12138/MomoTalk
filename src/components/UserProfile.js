@@ -25,7 +25,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
 
     return (
         <div className="container mt-4">
-            <div className="card mx-auto" style={{ maxWidth: '400px', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)', marginTop: '69px' }}>
+            <div className="card mx-auto" style={{ maxWidth: '400px', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)', marginTop: 'var(--header-height, 69px)' }}>
                 <div className="card-body text-center">
                     <div style={{ position: 'relative', display: 'inline-block' }}>
                         <img

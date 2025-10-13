@@ -10,7 +10,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
     };
 
     return (
-        <div className="list-group" style={{ marginTop: '69px', height: 'calc(100vh - 69px)', position: 'relative' }}>
+        <div className="list-group" style={{ marginTop: 'var(--header-height, 69px)', height: 'calc(100vh - var(--header-height, 69px))', position: 'relative' }}>
             {friends.length > 0 ? (
                 friends.map((friend) => (
                     <button
