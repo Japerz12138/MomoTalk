@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import '../custom_styles/UserProfile.css';
 import { DEFAULT_AVATAR } from '../constants';
 
-const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpdateProfile, onClose }) => {
+const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpdateProfile, onClose, isMobile }) => {
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState('');
     const [newInput, setNewInput] = useState('');
@@ -24,8 +24,40 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
     };
 
     return (
-        <div className="container mt-4">
-            <div className="card mx-auto" style={{ maxWidth: '400px', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)', marginTop: 'var(--header-height, 69px)' }}>
+        <div className={isMobile ? '' : 'container mt-4'} style={{ paddingTop: isMobile ? '0' : 'inherit', margin: isMobile ? '0' : 'auto', padding: isMobile ? '0' : 'inherit' }}>
+            {/* Mobile header */}
+            {isMobile && (
+                <div className="mobile-chat-header" style={{
+                    position: 'sticky',
+                    top: 0,
+                    padding: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    minHeight: '64px',
+                    margin: '0',
+                    width: '100%'
+                }}>
+                    <button 
+                        className="btn btn-link p-0 me-2" 
+                        onClick={onClose}
+                        style={{ fontSize: '1.5rem', lineHeight: 1 }}
+                    >
+                        <i className="bi bi-arrow-left"></i>
+                    </button>
+                    <h6 className="mb-0" style={{ fontSize: '1.25rem', lineHeight: 1 }}>
+                        {isOwnProfile ? 'My Profile' : user.nickname || user.username}
+                    </h6>
+                </div>
+            )}
+            
+            <div className="card mx-auto" style={{ 
+                maxWidth: '400px', 
+                boxShadow: isMobile ? 'none' : '0px 4px 8px rgba(0, 0, 0, 0.2)', 
+                marginTop: isMobile ? '16px' : 'var(--header-height, 69px)', 
+                marginLeft: isMobile ? '16px' : 'auto',
+                marginRight: isMobile ? '16px' : 'auto',
+                border: 'none' 
+            }}>
                 <div className="card-body text-center">
                     <div style={{ position: 'relative', display: 'inline-block' }}>
                         <img

@@ -371,28 +371,64 @@ html, body {
 }
 
 .mobile-sidebar-content .nav-link i {
-  margin-right: 15px;
-  width: 20px;
-  height: 20px;
+  margin-right: 12px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
   font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .mobile-sidebar-content .nav-link span {
   font-size: 1rem;
   font-weight: 500;
+  line-height: 1.5;
 }
 
 /* Mobile chat header */
 .mobile-chat-header {
-  background: white;
+  background: linear-gradient(to bottom, #FF95AB, #FF95A9) !important;
   position: sticky;
   top: 0;
   z-index: 100;
+  box-shadow: 0 2px 8px rgba(255, 149, 171, 0.3);
+  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  margin-top: 0 !important;
+  width: 100% !important;
+}
+
+.mobile-chat-header h6 {
+  color: white !important;
+  margin: 0;
+}
+
+.mobile-chat-header .btn-link {
+  color: white !important;
+  text-decoration: none;
+}
+
+.mobile-chat-header .btn-link:hover {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.mobile-chat-header .btn-link i {
+  color: white !important;
 }
 
 /* Mobile chat container */
 .mobile-chat-container {
-  padding-bottom: 0;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.mobile-chat-container .message-wrapper {
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 /* Mobile chat input */
@@ -408,9 +444,9 @@ html, body {
 
 /* Mobile menu button improvements */
 .mobile-menu-btn {
-  background: white !important;
-  border: 1px solid #dee2e6 !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+  background: linear-gradient(to bottom, #FF95AB, #FF95A9) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(255, 149, 171, 0.4) !important;
   border-radius: 12px !important;
   width: 48px !important;
   height: 48px !important;
@@ -418,19 +454,30 @@ html, body {
   bottom: 15px !important;
   left: 15px !important;
   z-index: 1050 !important;
+  transition: all 0.2s ease !important;
+}
+
+.mobile-menu-btn i {
+  color: white !important;
+  transition: color 0.2s ease !important;
 }
 
 .mobile-menu-btn:hover {
-  background: #f8f9fa !important;
-  border-color: #adb5bd !important;
+  background: linear-gradient(to bottom, #FF95AB, #FF95A9) !important;
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.2) !important;
-  transition: all 0.2s ease;
+  box-shadow: 0 6px 16px rgba(255, 149, 171, 0.5) !important;
 }
 
-.mobile-menu-btn:active {
+.mobile-menu-btn:active,
+.mobile-menu-btn.active {
+  background: white !important;
   transform: translateY(0);
   box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+}
+
+.mobile-menu-btn:active i,
+.mobile-menu-btn.active i {
+  color: #FF95AB !important;
 }
 
 /* Desktop sidebar icon improvements */

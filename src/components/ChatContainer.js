@@ -24,7 +24,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
     return (
         <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             <div
-                className={`chat-container p-3 ${isMobile ? 'mobile-chat-container' : ''}`}
+                className={`chat-container ${isMobile ? 'mobile-chat-container' : 'p-3'}`}
             style={{ 
                 marginTop: isMobile ? '0' : 'var(--header-height, 69px)', 
                 overflowY: 'auto', 
@@ -33,11 +33,11 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             }}
             >
             {isMobile && (
-                <div className="mobile-chat-header d-flex align-items-center mb-3 p-2 border-bottom">
+                <div className="mobile-chat-header d-flex align-items-center" style={{ padding: '16px', minHeight: '64px' }}>
                     <button 
                         className="btn btn-link p-0 me-2" 
                         onClick={onBack}
-                        style={{ fontSize: '1.2rem' }}
+                        style={{ fontSize: '1.5rem', lineHeight: 1 }}
                     >
                         <i className="bi bi-arrow-left"></i>
                     </button>
@@ -47,9 +47,12 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                         width="32"
                         height="32"
                         className="rounded-circle me-2"
-                        style={{ objectFit: 'cover' }}
+                        style={{ 
+                            objectFit: 'cover',
+                            border: '2px solid rgba(255, 255, 255, 0.5)'
+                        }}
                     />
-                    <h6 className="mb-0">{friend?.nickname || 'Unknown'}</h6>
+                    <h6 className="mb-0" style={{ fontSize: '1.25rem', lineHeight: 1 }}>{friend?.nickname || 'Unknown'}</h6>
                 </div>
             )}
             {!isMobile && (

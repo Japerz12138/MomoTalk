@@ -828,21 +828,8 @@ function App() {
                         <div className="mobile-app-container">
                             {/* Mobile Menu Button */}
                             <button 
-                                className="mobile-menu-btn btn btn-outline-secondary"
+                                className={`mobile-menu-btn ${sidebarOpen ? 'active' : ''}`}
                                 onClick={toggleSidebar}
-                                style={{
-                                    position: 'fixed',
-                                    bottom: '15px',
-                                    left: '15px',
-                                    zIndex: 1050,
-                                    borderRadius: '12px',
-                                    width: '48px',
-                                    height: '48px',
-                                    padding: '0',
-                                    backgroundColor: 'white',
-                                    border: '1px solid #dee2e6',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                                }}
                             >
                                 <i className="bi bi-list" style={{ fontSize: '1.2rem' }}></i>
                             </button>
@@ -911,11 +898,28 @@ function App() {
                                     </div>
                                 )}
 
-                                {activeSection === 'friend-list' && (
+                                {activeSection === 'friend-list' && !selectedFriend && (
                                     <div className="mobile-friend-list" style={{ height: '100%', overflow: 'auto' }}>
                                         <FriendList
                                             friends={friends}
-                                            onSelectFriend={handleSelectFriendMobile}
+                                            onSelectFriend={(friend) => {
+                                                setSelectedFriend(friend);
+                                            }}
+                                            isMobile={true}
+                                        />
+                                    </div>
+                                )}
+
+                                {activeSection === 'friend-list' && selectedFriend && (
+                                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1100, background: 'white', overflowY: 'auto' }}>
+                                        <UserProfile
+                                            user={selectedFriend}
+                                            isOwnProfile={false}
+                                            onSendMessage={() => {
+                                                setActiveSection('chat');
+                                            }}
+                                            onRemoveFriend={handleRemoveFriend}
+                                            onClose={() => setSelectedFriend(null)}
                                             isMobile={true}
                                         />
                                     </div>
@@ -997,7 +1001,7 @@ function App() {
                             </div>
 
                             {/* Chat Container for Mobile */}
-                            {selectedFriend && (
+                            {activeSection === 'chat' && selectedFriend && (
                                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1100, background: 'white' }}>
                                     <ChatContainer
                                         friend={selectedFriend}
