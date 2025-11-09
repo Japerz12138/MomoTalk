@@ -50,6 +50,10 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Serve static files from React build
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'build')));
+
 // Database connection
 const db = mysql.createPool(DB_CONFIG);
 
@@ -630,6 +634,11 @@ const cleanExpiredRequests = () => {
         }
     });
 };
+
+// Serve React app for all other routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
 
 // Server startup
 server.listen(PORT, () => {
