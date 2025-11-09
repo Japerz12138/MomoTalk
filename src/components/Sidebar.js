@@ -3,7 +3,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import UserMenu from './UserMenu';
 import { DEFAULT_AVATAR } from '../constants';
 
-const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChange, nickname, username, avatar, isMobile }) => {
+const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChange, nickname, username, avatar, isMobile, onClose }) => {
     return (
         <div 
             className={`d-flex flex-column flex-shrink-0 sidebar ${isMobile ? 'mobile-sidebar-content' : ''}`} 
@@ -63,7 +63,10 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                     <a
                         href="#"
                         className={`nav-link py-3 ${activeSection === 'chat' ? 'active' : ''}`}
-                        onClick={() => onSectionChange('chat')}
+                        onClick={() => {
+                            onSectionChange('chat');
+                            if (isMobile && onClose) onClose();
+                        }}
                     >
                         <i className={`bi bi-chat-dots ${isMobile ? 'me-2' : ''}`} style={{ fontSize: isMobile ? '1.1rem' : '1.5rem' }}></i>
                         {isMobile && <span>Chats</span>}
@@ -73,7 +76,10 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                     <a
                         href="#"
                         className={`nav-link py-3 ${activeSection === 'friend-list' ? 'active' : ''}`}
-                        onClick={() => onSectionChange('friend-list')}
+                        onClick={() => {
+                            onSectionChange('friend-list');
+                            if (isMobile && onClose) onClose();
+                        }}
                     >
                         <i className={`bi bi-people ${isMobile ? 'me-2' : ''}`} style={{ fontSize: isMobile ? '1.1rem' : '1.5rem' }}></i>
                         {isMobile && <span>Friends</span>}
@@ -83,7 +89,10 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                     <a
                         href="#"
                         className={`nav-link py-3 ${activeSection === 'add-friend' ? 'active' : ''}`}
-                        onClick={() => onSectionChange('add-friend')}
+                        onClick={() => {
+                            onSectionChange('add-friend');
+                            if (isMobile && onClose) onClose();
+                        }}
                     >
                         <i className={`bi bi-person-plus ${isMobile ? 'me-2' : ''}`} style={{ fontSize: isMobile ? '1.1rem' : '1.5rem' }}></i>
                         {isMobile && <span>Add Friend</span>}
@@ -99,7 +108,10 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                             <a
                                 href="#"
                                 className={`nav-link py-3 ${activeSection === 'profile' ? 'active' : ''}`}
-                                onClick={() => onSectionChange('profile')}
+                                onClick={() => {
+                                    onSectionChange('profile');
+                                    if (onClose) onClose();
+                                }}
                             >
                                 <i className="bi bi-person-circle me-2" style={{ fontSize: '1.1rem' }}></i>
                                 <span>Profile</span>
@@ -109,7 +121,10 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                             <a
                                 href="#"
                                 className={`nav-link py-3 ${activeSection === 'settings' ? 'active' : ''}`}
-                                onClick={() => onSectionChange('settings')}
+                                onClick={() => {
+                                    onSectionChange('settings');
+                                    if (onClose) onClose();
+                                }}
                             >
                                 <i className="bi bi-gear me-2" style={{ fontSize: '1.1rem' }}></i>
                                 <span>Settings</span>
@@ -122,6 +137,7 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                                 onClick={(e) => {
                                     e.preventDefault();
                                     onLogout();
+                                    if (onClose) onClose();
                                 }}
                                 style={{ color: '#ff6b6b' }}
                             >

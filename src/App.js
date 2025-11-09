@@ -874,6 +874,7 @@ function App() {
                                     username={username}
                                     avatar={avatar}
                                     isMobile={true}
+                                    onClose={closeSidebar}
                                 />
                             </div>
 

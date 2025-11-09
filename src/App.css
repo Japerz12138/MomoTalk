@@ -305,7 +305,7 @@ html, body {
   .chat-container {
     height: calc(100vh - 120px) !important;
     overflow-y: auto;
-    padding-bottom: 70px;
+    padding-bottom: 120px !important;
   }
 
   /* Mobile message bubbles */
@@ -452,7 +452,7 @@ html, body {
   height: 48px !important;
   position: fixed !important;
   bottom: 15px !important;
-  left: 15px !important;
+  right: 15px !important;
   z-index: 1050 !important;
   transition: all 0.2s ease !important;
 }

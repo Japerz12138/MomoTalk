@@ -22,14 +22,18 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
     };
 
     return (
-        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ 
+            height: isMobile ? '100vh' : 'calc(100vh - 60px)', 
+            display: 'flex', 
+            flexDirection: 'column' 
+        }}>
             <div
                 className={`chat-container ${isMobile ? 'mobile-chat-container' : 'p-3'}`}
             style={{ 
                 marginTop: isMobile ? '0' : 'var(--header-height, 69px)', 
                 overflowY: 'auto', 
                 flex: 1,
-                paddingBottom: isMobile ? '80px' : '10px'
+                paddingBottom: isMobile ? '100px' : '10px'
             }}
             >
             {isMobile && (
