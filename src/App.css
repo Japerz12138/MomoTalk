@@ -5,13 +5,6 @@
 html, body {
   overflow: auto;
   height: 100%;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  /* iOS Safari fix for 100vh with address bar */
-  min-height: -webkit-fill-available;
 }
 
 /* Tab badge animation and styling */
@@ -257,9 +250,7 @@ body {
   
   .mobile-app-container {
     height: 100vh;
-    height: -webkit-fill-available; /* iOS Safari fix */
     overflow: hidden;
-    position: relative;
   }
 
   .mobile-menu-btn {
@@ -295,19 +286,15 @@ body {
   }
 
   .mobile-main-content {
-    position: absolute;
-    top: var(--header-height);
-    left: 0;
-    right: 0;
-    bottom: 0;
+    height: 100vh;
     overflow: hidden;
+    padding-top: 0; /* Remove top padding */
   }
 
   .mobile-chat-list,
   .mobile-friend-list {
     height: 100%;
     overflow: auto;
-    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
     padding: 8px 0 8px 12px; /* Add left padding and reduce top/bottom padding */
   }
   
@@ -330,9 +317,8 @@ body {
 
   /* Mobile chat container */
   .chat-container {
-    height: calc(100vh - var(--header-height) - 70px) !important;
+    height: calc(100vh - 120px) !important;
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
     padding-bottom: 150px !important;
   }
 
@@ -454,7 +440,7 @@ body {
   padding-bottom: 90px !important;
   margin: 0 !important;
   margin-bottom: 0px !important;
-  height: calc(100vh - var(--header-height)) !important;
+  height: calc(100vh - 70px) !important;
 }
 
 .mobile-chat-container .message-wrapper {

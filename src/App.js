@@ -161,8 +161,7 @@ function App() {
             //Check Local Storge notification settings
             const isInternalNotificationEnabled = JSON.parse(localStorage.getItem("internalNotificationEnabled")) || false;
 
-            // Check if Notification API is supported and permission is granted
-            if ('Notification' in window && Notification.permission === 'granted' && isInternalNotificationEnabled) {
+            if (Notification.permission === 'granted' && isInternalNotificationEnabled) {
                 // Show appropriate notification text based on message type
                 const notificationBody = message.text || (message.imageUrl ? '[Image]' : 'New message');
                 const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
@@ -319,11 +318,6 @@ function App() {
 
     //Check if have broswer notification permission
     useEffect(() => {
-        // Check if Notification API is supported (not available on iOS Safari)
-        if (!('Notification' in window)) {
-            return;
-        }
-        
         const notificationDismissed = localStorage.getItem('notificationDismissed');
         if (Notification.permission === 'default' && !notificationDismissed) {
             setShowNotificationModal(true);
@@ -331,13 +325,6 @@ function App() {
     }, []);
 
     const handleRequestNotificationPermission = () => {
-        // Check if Notification API is supported
-        if (!('Notification' in window)) {
-            alert('Notifications are not supported on this device/browser.');
-            setShowNotificationModal(false);
-            return;
-        }
-        
         Notification.requestPermission().then((permission) => {
             setShowNotificationModal(false);
             console.log(`Notification permission: ${permission}`);
@@ -989,7 +976,7 @@ function App() {
                             </div>
 
                             {/* Main Content */}
-                            <div className="mobile-main-content">
+                            <div className="mobile-main-content" style={{ height: '100vh', overflow: 'hidden' }}>
                                 {activeSection === 'chat' && (
                                     <div className="mobile-chat-list" style={{ height: '100%', overflow: 'auto' }}>
                                         <MessageList
