@@ -33,6 +33,7 @@ function App() {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [nickname, setNickname] = useState('');
+    const [signature, setSignature] = useState('');
     const [captcha, setCaptcha] = useState('');
     const [captchaInput, setCaptchaInput] = useState('');
     const [friends, setFriends] = useState([]);
@@ -99,6 +100,7 @@ function App() {
         const savedToken = localStorage.getItem('token');
         const savedUsername = localStorage.getItem('username');
         const savedNickname = localStorage.getItem('nickname');
+        const savedSignature = localStorage.getItem('signature');
         const savedUserId = localStorage.getItem('userId');
         const savedAvatar = localStorage.getItem('avatar');
         const savedMomoCode = localStorage.getItem('momoCode');
@@ -111,6 +113,7 @@ function App() {
 
         if (savedUsername) setUsername(savedUsername);
         if (savedNickname) setNickname(savedNickname);
+        if (savedSignature) setSignature(savedSignature);
         if (savedUserId) setUserId(parseInt(savedUserId, 10));
         if (savedAvatar) setAvatar(savedAvatar);
         else setAvatar(DEFAULT_AVATAR);
@@ -158,7 +161,8 @@ function App() {
             //Check Local Storge notification settings
             const isInternalNotificationEnabled = JSON.parse(localStorage.getItem("internalNotificationEnabled")) || false;
 
-            if (Notification.permission === 'granted' && isInternalNotificationEnabled) {
+            // Check if Notification API is supported and permission is granted
+            if ('Notification' in window && Notification.permission === 'granted' && isInternalNotificationEnabled) {
                 // Show appropriate notification text based on message type
                 const notificationBody = message.text || (message.imageUrl ? '[Image]' : 'New message');
                 const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
@@ -315,6 +319,11 @@ function App() {
 
     //Check if have broswer notification permission
     useEffect(() => {
+        // Check if Notification API is supported (not available on iOS Safari)
+        if (!('Notification' in window)) {
+            return;
+        }
+        
         const notificationDismissed = localStorage.getItem('notificationDismissed');
         if (Notification.permission === 'default' && !notificationDismissed) {
             setShowNotificationModal(true);
@@ -322,6 +331,13 @@ function App() {
     }, []);
 
     const handleRequestNotificationPermission = () => {
+        // Check if Notification API is supported
+        if (!('Notification' in window)) {
+            alert('Notifications are not supported on this device/browser.');
+            setShowNotificationModal(false);
+            return;
+        }
+        
         Notification.requestPermission().then((permission) => {
             setShowNotificationModal(false);
             console.log(`Notification permission: ${permission}`);
@@ -426,11 +442,12 @@ function App() {
         e.preventDefault();
         try {
             const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/login`, { username, password });
-            const { token, username: loggedInUsername, nickname: loggedInNickname, userId: loggedInUserId, avatar, momoCode: userMomoCode } = response.data;
+            const { token, username: loggedInUsername, nickname: loggedInNickname, signature: userSignature, userId: loggedInUserId, avatar, momoCode: userMomoCode } = response.data;
 
             setToken(token);
             setUsername(loggedInUsername);
             setNickname(loggedInNickname);
+            setSignature(userSignature || '');
             setUserId(loggedInUserId);
             setAvatar(avatar || DEFAULT_AVATAR);
             setMomoCode(userMomoCode || '');
@@ -438,6 +455,7 @@ function App() {
             localStorage.setItem('token', token);
             localStorage.setItem('username', loggedInUsername);
             localStorage.setItem('nickname', loggedInNickname);
+            localStorage.setItem('signature', userSignature || '');
             localStorage.setItem('userId', loggedInUserId);
             localStorage.setItem('avatar', avatar || DEFAULT_AVATAR);
             localStorage.setItem('momoCode', userMomoCode || '');
@@ -756,6 +774,7 @@ function App() {
         localStorage.removeItem('token');
         localStorage.removeItem('username');
         localStorage.removeItem('nickname');
+        localStorage.removeItem('signature');
         localStorage.removeItem('userId');
 
         setActiveSection('login');
@@ -801,6 +820,41 @@ function App() {
         const randomCaptcha = Math.random().toString(36).substring(2, 8).toUpperCase();
         setCaptcha(randomCaptcha);
     };
+
+    // Update header badge based on current section
+    const updateHeaderBadge = (section) => {
+        const badge = document.getElementById('current-tab-badge');
+        if (!badge) return;
+
+        const sectionNames = {
+            'chat': 'Chat',
+            'friend-list': 'Friend List',
+            'add-friend': 'Add Friend',
+            'profile': 'Profile',
+            'settings': 'Settings'
+        };
+
+        const displayName = sectionNames[section];
+        if (displayName) {
+            badge.textContent = displayName;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    };
+
+    // Update badge when section changes
+    useEffect(() => {
+        if (token) {
+            updateHeaderBadge(activeSection);
+        } else {
+            // Hide badge when not logged in
+            const badge = document.getElementById('current-tab-badge');
+            if (badge) {
+                badge.style.display = 'none';
+            }
+        }
+    }, [activeSection, token]);
 
     //IF ADD NAVIGATION ITEM, CHANGE THIS AS WELL!
     const handleSectionChange = (section) => {
@@ -935,7 +989,7 @@ function App() {
                             </div>
 
                             {/* Main Content */}
-                            <div className="mobile-main-content" style={{ height: '100vh', overflow: 'hidden' }}>
+                            <div className="mobile-main-content">
                                 {activeSection === 'chat' && (
                                     <div className="mobile-chat-list" style={{ height: '100%', overflow: 'auto' }}>
                                         <MessageList
@@ -1006,23 +1060,26 @@ function App() {
                                         <SettingsPage
                                             nickname={nickname}
                                             avatar={avatar}
+                                            signature={signature}
                                             isDarkMode={isDarkMode}
                                             isAutoMode={isAutoMode}
                                             onUpdatePassword={handleUpdatePassword}
                                             onToggleDarkMode={toggleDarkMode}
                                             onToggleAutoMode={toggleAutoMode}
-                                            onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
+                                            onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature }) => {
                                                 try {
                                                     const response = await axios.post(
                                                         `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
-                                                        { nickname, avatar: newAvatar },
+                                                        { nickname, avatar: newAvatar, signature: newSignature },
                                                         { headers: { Authorization: `Bearer ${token}` } }
                                                     );
                                                     alert(response.data.message);
                                                     setNickname(nickname);
                                                     setAvatar(newAvatar || DEFAULT_AVATAR);
+                                                    setSignature(newSignature || '');
                                                     localStorage.setItem('nickname', nickname);
                                                     localStorage.setItem('avatar', newAvatar || DEFAULT_AVATAR);
+                                                    localStorage.setItem('signature', newSignature || '');
                                                 } catch (error) {
                                                     console.error('Error updating profile:', error.response?.data || error.message);
                                                     alert('Failed to update profile.');
@@ -1036,21 +1093,23 @@ function App() {
                                 {activeSection === 'profile' && (
                                     <div style={{ height: '100%', overflow: 'auto' }}>
                                         <UserProfile
-                                            user={{ username, nickname, avatar, momoCode }}
+                                            user={{ username, nickname, avatar, momoCode, signature }}
                                             isOwnProfile={true}
                                             onClose={() => setActiveSection('chat')}
-                                            onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
+                                            onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature }) => {
                                                 try {
                                                     const response = await axios.post(
                                                         `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
-                                                        { nickname, avatar: newAvatar },
+                                                        { nickname, avatar: newAvatar, signature: newSignature },
                                                         { headers: { Authorization: `Bearer ${token}` } }
                                                     );
                                                     alert(response.data.message);
                                                     setNickname(nickname);
                                                     setAvatar(newAvatar || DEFAULT_AVATAR);
+                                                    setSignature(newSignature || '');
                                                     localStorage.setItem('nickname', nickname);
                                                     localStorage.setItem('avatar', newAvatar || DEFAULT_AVATAR);
+                                                    localStorage.setItem('signature', newSignature || '');
                                                 } catch (error) {
                                                     console.error('Error updating profile:', error.response?.data || error.message);
                                                     alert('Failed to update profile.');
@@ -1198,21 +1257,23 @@ function App() {
                                 )}
                                 {activeSection === 'profile' && (
                                     <UserProfile
-                                        user={{ username, nickname, avatar, momoCode }}
+                                        user={{ username, nickname, avatar, momoCode, signature }}
                                         isOwnProfile={true}
-                                        onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
+                                        onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature }) => {
                                             const updatedAvatar = newAvatar || avatar;
                                             try {
                                                 const response = await axios.post(
                                                     `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
-                                                    { nickname, avatar: updatedAvatar },
+                                                    { nickname, avatar: updatedAvatar, signature: newSignature },
                                                     { headers: { Authorization: `Bearer ${token}` } }
                                                 );
                                                 alert(response.data.message);
                                                 setNickname(nickname);
                                                 setAvatar(updatedAvatar || DEFAULT_AVATAR);
+                                                setSignature(newSignature || '');
                                                 localStorage.setItem('nickname', nickname);
                                                 localStorage.setItem('avatar', updatedAvatar || DEFAULT_AVATAR);
+                                                localStorage.setItem('signature', newSignature || '');
                                             } catch (error) {
                                                 console.error('Error updating profile:', error.response?.data || error.message);
                                                 alert('Failed to update profile.');

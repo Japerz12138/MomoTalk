@@ -309,6 +309,7 @@ app.post('/login', (req, res) => {
                 avatar: user.avatar || null,
                 email: user.email,
                 momoCode: user.momo_code || null,
+                signature: user.signature || '',
             });
         });
     });
@@ -400,7 +401,7 @@ app.get('/friends', authenticateToken, (req, res) => {
     const userId = req.user.userId;
 
     const friendsQuery = `
-        SELECT u.id, u.username, u.nickname, u.avatar,
+        SELECT u.id, u.username, u.nickname, u.avatar, u.signature,
                (SELECT d.text
                 FROM dms d
                 WHERE (d.sender_id = u.id AND d.receiver_id = ?)
@@ -564,9 +565,8 @@ app.post('/upload/avatar', authenticateToken, upload.single('avatar'), async (re
                 .jpeg({ quality: 85 })
                 .toFile(filepath);
 
-            // Generate full URL path
-            const serverDomain = process.env.SERVER_URL || `http://localhost:${PORT}`;
-            avatarUrl = `${serverDomain}/uploads/avatars/${filename}`;
+            // Generate relative URL path (works with same-origin frontend)
+            avatarUrl = `/uploads/avatars/${filename}`;
             
             // Store MD5 and URL in database
             await db.promise().query(
@@ -644,9 +644,8 @@ app.post('/upload/chat-image', authenticateToken, upload.single('image'), async 
                     .toFile(filepath);
             }
 
-            // Generate full URL path
-            const serverDomain = process.env.SERVER_URL || `http://localhost:${PORT}`;
-            imageUrl = `${serverDomain}/uploads/chat-images/${filename}`;
+            // Generate relative URL path (works with same-origin frontend)
+            imageUrl = `/uploads/chat-images/${filename}`;
             
             // Store MD5 and URL in database
             await db.promise().query(
@@ -669,11 +668,11 @@ app.post('/upload/chat-image', authenticateToken, upload.single('image'), async 
 });
 
 app.post('/user/update', authenticateToken, async (req, res) => {
-    const { nickname, avatar, oldPassword, newPassword } = req.body;
+    const { nickname, avatar, signature, oldPassword, newPassword } = req.body;
     const userId = req.user.userId;
 
     // Validate request
-    if (!nickname && !avatar && (!oldPassword || !newPassword)) {
+    if (!nickname && !avatar && !signature && (!oldPassword || !newPassword)) {
         return res.status(400).json({ error: 'No updates provided.' });
     }
 
@@ -698,7 +697,7 @@ app.post('/user/update', authenticateToken, async (req, res) => {
             await db.promise().query(updatePasswordQuery, [hashedPassword, userId]);
         }
 
-        // Handle nickname and avatar updates
+        // Handle nickname, avatar, and signature updates
         const updates = [];
         const params = [];
         if (nickname) {
@@ -708,6 +707,10 @@ app.post('/user/update', authenticateToken, async (req, res) => {
         if (avatar) {
             updates.push('avatar = ?');
             params.push(avatar);
+        }
+        if (signature !== undefined) {
+            updates.push('signature = ?');
+            params.push(signature);
         }
         if (updates.length > 0) {
             params.push(userId);

@@ -1,7 +1,8 @@
 /**
  * Helper function to get full image URL
  * If the URL is already absolute (starts with http), return as is
- * If it's relative, prepend the server domain
+ * If it's relative and REACT_APP_SERVER_DOMAIN is set, prepend the server domain
+ * Otherwise, return the relative URL as is (for same-origin deployments)
  */
 export const getFullImageUrl = (imageUrl) => {
     if (!imageUrl) return null;
@@ -11,12 +12,15 @@ export const getFullImageUrl = (imageUrl) => {
         return imageUrl;
     }
     
-    // It's a relative URL, prepend server domain
-    const serverDomain = process.env.REACT_APP_SERVER_DOMAIN || 'http://localhost:5000';
+    // If no server domain is configured, use relative URL (same-origin)
+    const serverDomain = process.env.REACT_APP_SERVER_DOMAIN;
+    if (!serverDomain || serverDomain === '') {
+        // Ensure it starts with /
+        return imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+    }
     
-    // Remove leading slash if exists to avoid double slashes
+    // It's a relative URL and we have a server domain, prepend it
     const cleanUrl = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
-    
     return `${serverDomain}${cleanUrl}`;
 };
 

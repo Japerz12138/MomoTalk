@@ -13,7 +13,13 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
 
     const handleEditClick = (type) => {
         setModalType(type);
-        setNewInput(type === 'nickname' ? user.nickname || '' : '');
+        if (type === 'nickname') {
+            setNewInput(user.nickname || '');
+        } else if (type === 'signature') {
+            setNewInput(user.signature || '');
+        } else {
+            setNewInput('');
+        }
         setUploadError('');
         setShowModal(true);
     };
@@ -48,7 +54,10 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
 
     const handleSave = () => {
         if (modalType === 'nickname') {
-            onUpdateProfile({ nickname: newInput, avatar: user.avatar });
+            onUpdateProfile({ nickname: newInput, avatar: user.avatar, signature: user.signature });
+            setShowModal(false);
+        } else if (modalType === 'signature') {
+            onUpdateProfile({ nickname: user.nickname, avatar: user.avatar, signature: newInput });
             setShowModal(false);
         }
     };
@@ -125,8 +134,13 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                             ? user.nickname
                             : user.username || "No Nickname"}
                     </h5>
-                    <p className="text-muted">
-                        @{user.username || "Unknown Username"}
+                    {isOwnProfile && (
+                        <p className="text-muted">
+                            @{user.username || "Unknown Username"}
+                        </p>
+                    )}
+                    <p className="text-muted" style={{ fontSize: '0.95rem', marginTop: isOwnProfile ? '5px' : '10px' }}>
+                        {user.signature || (isOwnProfile ? 'No signature yet' : '')}
                     </p>
                     {user.momoCode && (
                         <div style={{ 
@@ -157,6 +171,12 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                 onClick={() => handleEditClick('nickname')}
                             >
                                 Change Nickname
+                            </button>
+                            <button
+                                className="btn custom-btn"
+                                onClick={() => handleEditClick('signature')}
+                            >
+                                Change Signature
                             </button>
                         </div>
                     )}
@@ -189,7 +209,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                             <div className="modal-header">
                                 <h5 className="modal-title">
                                     <i className="bi bi-pen"></i>
-                                    {modalType === 'avatar' ? '  Edit Avatar' : '  Edit Nickname'}
+                                    {modalType === 'avatar' ? '  Edit Avatar' : modalType === 'signature' ? '  Edit Signature' : '  Edit Nickname'}
                                 </h5>
                                 <button
                                     type="button"
@@ -206,6 +226,22 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                             buttonText="Upload Avatar"
                                         />
                                     </div>
+                                ) : modalType === 'signature' ? (
+                                    <div>
+                                        <label htmlFor="inputField" className="form-label">
+                                            Enter new signature:
+                                        </label>
+                                        <input
+                                            id="inputField"
+                                            type="text"
+                                            className="form-control"
+                                            value={newInput}
+                                            onChange={(e) => setNewInput(e.target.value)}
+                                            maxLength="30"
+                                            placeholder="Write something about yourself..."
+                                        />
+                                        <small className="text-muted">Maximum 30 characters</small>
+                                    </div>
                                 ) : (
                                     <div>
                                         <label htmlFor="inputField" className="form-label">
@@ -221,7 +257,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                     </div>
                                 )}
                             </div>
-                            {modalType === 'nickname' && (
+                            {(modalType === 'nickname' || modalType === 'signature') && (
                                 <div className="modal-footer">
                                     <button
                                         type="button"

@@ -3,6 +3,7 @@ import { DEFAULT_AVATAR } from '../constants';
 
 function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
     const [selectedMessageId, setSelectedMessageId] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const handleSelectMessage = (msg) => {
         setSelectedMessageId(msg.id);
@@ -21,16 +22,57 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
     };
 
     const truncateNickname = (nickname) => {
-        return nickname.length > 12 ? `${nickname.slice(0, 12)}...` : nickname;
+        return nickname.length > 10 ? `${nickname.slice(0, 10)}...` : nickname;
     };
 
     //Sort the message with time stamp
     const sortedMessages = [...messages].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
+    // Filter messages based on search query
+    const filteredMessages = sortedMessages.filter((msg) => {
+        const query = searchQuery.toLowerCase().trim();
+        if (!query) return true;
+        
+        const nickname = (msg.nickname || '').toLowerCase();
+        const username = (msg.username || '').toLowerCase();
+        const text = (msg.text || '').toLowerCase();
+        
+        return nickname.includes(query) || username.includes(query) || text.includes(query);
+    });
+
     return (
-        <div className="list-group" style={{ marginTop: 'var(--header-height, 69px)', height: 'calc(100vh - var(--header-height, 69px))', position: 'relative' }}>
-            {sortedMessages.length > 0 ? (
-                sortedMessages.map((msg) => (
+        <div style={{ marginTop: 'var(--header-height, 69px)', height: 'calc(100vh - var(--header-height, 69px))', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+            {/* Search bar */}
+            <div style={{ padding: '12px', borderBottom: '1px solid #dee2e6', backgroundColor: '#fff', flexShrink: 0 }}>
+                <div className="input-group">
+                    <span className="input-group-text" style={{ backgroundColor: '#fff', border: '1px solid #ced4da' }}>
+                        <i className="bi bi-search"></i>
+                    </span>
+                    <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Search conversations..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{ border: '1px solid #ced4da' }}
+                    />
+                    {searchQuery && (
+                        <button
+                            className="btn btn-outline-secondary"
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            style={{ border: '1px solid #ced4da' }}
+                        >
+                            <i className="bi bi-x"></i>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Messages list */}
+            <div className="list-group" style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+                {filteredMessages.length > 0 ? (
+                    filteredMessages.map((msg) => (
                     <div
                         key={msg.id}
                         className={`list-group-item d-flex align-items-center ${
@@ -101,7 +143,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                         </div>
                     </div>
                 ))
-            ) : (
+            ) : sortedMessages.length === 0 ? (
                 <div
                     className="d-flex flex-column align-items-center justify-content-center text-muted"
                     style={{
@@ -115,7 +157,22 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                     <i className="bi bi-chat-left-dots" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
                     <div style={{ marginTop: '10px' }}>Pick a friend to talk to!</div>
                 </div>
+            ) : (
+                <div
+                    className="d-flex flex-column align-items-center justify-content-center text-muted"
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                    }}
+                >
+                    <i className="bi bi-search" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                    <div style={{ marginTop: '10px' }}>No conversations found matching "{searchQuery}"</div>
+                </div>
             )}
+            </div>
         </div>
     );
 

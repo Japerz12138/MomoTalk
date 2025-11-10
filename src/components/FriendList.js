@@ -3,16 +3,58 @@ import { DEFAULT_AVATAR } from '../constants';
 
 const FriendList = ({ friends, onSelectFriend }) => {
     const [selectedFriendId, setSelectedFriendId] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const handleSelectFriend = (friend) => {
         setSelectedFriendId(friend.id);
         onSelectFriend(friend);
     };
 
+    // Filter friends based on search query
+    const filteredFriends = friends.filter((friend) => {
+        const query = searchQuery.toLowerCase().trim();
+        if (!query) return true;
+        
+        const nickname = (friend.nickname || '').toLowerCase();
+        const username = (friend.username || '').toLowerCase();
+        const signature = (friend.signature || '').toLowerCase();
+        
+        return nickname.includes(query) || username.includes(query) || signature.includes(query);
+    });
+
     return (
-        <div className="list-group" style={{ marginTop: 'var(--header-height, 69px)', height: 'calc(100vh - var(--header-height, 69px))', position: 'relative' }}>
-            {friends.length > 0 ? (
-                friends.map((friend) => (
+        <div style={{ marginTop: 'var(--header-height, 69px)', height: 'calc(100vh - var(--header-height, 69px))', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+            {/* Search bar */}
+            <div style={{ padding: '12px', borderBottom: '1px solid #dee2e6', backgroundColor: '#fff', flexShrink: 0 }}>
+                <div className="input-group">
+                    <span className="input-group-text" style={{ backgroundColor: '#fff', border: '1px solid #ced4da' }}>
+                        <i className="bi bi-search"></i>
+                    </span>
+                    <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Search friends..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{ border: '1px solid #ced4da' }}
+                    />
+                    {searchQuery && (
+                        <button
+                            className="btn btn-outline-secondary"
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            style={{ border: '1px solid #ced4da' }}
+                        >
+                            <i className="bi bi-x"></i>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Friends list */}
+            <div className="list-group" style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+                {filteredFriends.length > 0 ? (
+                    filteredFriends.map((friend) => (
                     <button
                         key={friend.id}
                         type="button"
@@ -45,12 +87,31 @@ const FriendList = ({ friends, onSelectFriend }) => {
                                 ></span>
                             )}
                         </div>
-                        <div className="flex-grow-1 text-start">
-                            <strong>{friend.nickname || friend.username}</strong>
+                        <div className="flex-grow-1 text-start" style={{ overflow: 'hidden', minWidth: 0 }}>
+                            <div style={{ 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis', 
+                                whiteSpace: 'nowrap' 
+                            }}>
+                                <strong>{friend.nickname || friend.username}</strong>
+                            </div>
+                            {friend.signature && (
+                                <div style={{ 
+                                    fontSize: '0.85rem', 
+                                    color: '#6c757d', 
+                                    marginTop: '2px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '100%'
+                                }}>
+                                    {friend.signature}
+                                </div>
+                            )}
                         </div>
                     </button>
                 ))
-            ) : (
+            ) : friends.length === 0 ? (
                 <div
                     className="d-flex flex-column align-items-center justify-content-center text-muted"
                     style={{
@@ -64,7 +125,22 @@ const FriendList = ({ friends, onSelectFriend }) => {
                     <i className="bi bi-plus-circle-dotted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
                     <div style={{ marginTop: '10px' }}>Time to add some friends!</div>
                 </div>
+            ) : (
+                <div
+                    className="d-flex flex-column align-items-center justify-content-center text-muted"
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                    }}
+                >
+                    <i className="bi bi-search" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                    <div style={{ marginTop: '10px' }}>No friends found matching "{searchQuery}"</div>
+                </div>
             )}
+            </div>
         </div>
     );
 

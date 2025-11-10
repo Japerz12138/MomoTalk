@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#FF95AB" />
     <meta
       name="description"
@@ -62,10 +62,10 @@
         z-index: 1000;
       "
   >
-    <a
-            href="/"
-            class="d-flex align-items-center text-decoration-none brand-title"
-            style="margin-bottom: 0;"
+    <div class="d-flex align-items-center" style="width: 100%;">
+    <div
+            class="d-flex align-items-center brand-title"
+            style="margin-bottom: 0; flex-shrink: 0;"
     >
       <svg
               id="_x32_"
@@ -102,7 +102,20 @@
           </g>
         </svg>
       <span class="fs-4">MomoTalk</span>
-    </a>
+      <span id="current-tab-badge" style="
+        display: none;
+        margin-left: 12px;
+        padding: 4px 14px;
+        background-color: white;
+        color: #FF95A9;
+        border-radius: 50px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        font-family: 'Fredoka', sans-serif;
+        text-shadow: none;
+      "></span>
+    </div>
+    </div>
   </header>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>

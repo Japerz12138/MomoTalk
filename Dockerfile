@@ -16,13 +16,16 @@ RUN npm ci --only=production && npm install react-scripts
 COPY . .
 
 # Build React app (use empty URLs since frontend and backend are on same server)
-# Make sure to fill in the empty strings with the correct values!!
+# Keep these empty for same-origin deployment (frontend and backend on same domain)
 ENV REACT_APP_API_URL=""
 ENV REACT_APP_SERVER_DOMAIN=""
 ENV DB_HOST="YOUR_DB_HOST"
 ENV DB_USER="YOUR_DB_USER"
 ENV DB_PASSWORD="YOUR_DB_PASSWORD"
 ENV DB_DATABASE="YOUR_DATABASE"
+
+# Build the React app for production
+RUN npm run build
 
 # Expose ports
 EXPOSE 5000

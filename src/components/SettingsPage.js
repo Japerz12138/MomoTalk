@@ -4,7 +4,10 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
     const [oldPassword, setOldPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
+    // Check if Notification API is supported before accessing it (iOS Safari doesn't support it)
+    const [notificationPermission, setNotificationPermission] = useState(
+        ('Notification' in window) ? Notification.permission : 'unsupported'
+    );
     const [internalNotificationEnabled, setInternalNotificationEnabled] = useState(() => {
         const storedValue = localStorage.getItem("internalNotificationEnabled");
         if (storedValue === null) {
@@ -15,7 +18,12 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
     });
 
     useEffect(() => {
-        setNotificationPermission(Notification.permission);
+        // Check if Notification API is supported (not available on iOS Safari)
+        if ('Notification' in window) {
+            setNotificationPermission(Notification.permission);
+        } else {
+            setNotificationPermission('unsupported');
+        }
     }, []);
 
     const handlePasswordUpdate = () => {
@@ -26,6 +34,12 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
     };
 
     const requestNotificationPermission = () => {
+        // Check if Notification API is supported
+        if (!('Notification' in window)) {
+            alert("Notifications are not supported on this device/browser (iOS Safari doesn't support notifications).");
+            return;
+        }
+        
         if (notificationPermission === "denied") {
             alert(
                 "Notification permission is denied! Please enable it by clicking the \"i\" icon on the left side of your URL bar and change the website notification setting!"
@@ -115,7 +129,13 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
             <div className="card mb-4">
                 <div className="card-body">
                     <h5 className="card-title">Notifications</h5>
-                    {notificationPermission === "granted" ? (
+                    {notificationPermission === "unsupported" ? (
+                        <div className="alert alert-info d-flex align-items-center" role="alert">
+                            <div>
+                                Notifications are not supported on this device/browser. iOS Safari and some browsers don't support web notifications.
+                            </div>
+                        </div>
+                    ) : notificationPermission === "granted" ? (
                         <>
                             <div className="alert alert-success d-flex align-items-center" role="alert">
                                 <div>Notification has been enabled!</div>
