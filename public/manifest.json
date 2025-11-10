@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "MomoTalk",
+  "name": "MomoTalk - Social Messaging Platform",
+  "description": "A social messaging platform inspired by Blue Archive",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +21,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#FF95AB",
   "background_color": "#ffffff"
 }
