@@ -161,7 +161,6 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                     marginTop: isMobile ? '0' : 'var(--header-height, 69px)', 
                     overflowY: 'auto', 
                     flex: 1,
-                    paddingBottom: isMobile ? '100px' : '10px',
                     position: 'relative'
                 }}
                 onDragEnter={handleDragEnter}

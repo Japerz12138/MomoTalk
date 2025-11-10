@@ -94,16 +94,20 @@ const MessageInput = ({ input, onInputChange, onSendMessage, onImageUpload, isMo
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
                     title="Upload image"
+                    style={{
+                        borderTopLeftRadius: '0.375rem',
+                        borderBottomLeftRadius: '0.375rem'
+                    }}
                 >
                     <i className="bi bi-image"></i>
                 </button>
                 <button
-                    className="btn btn-outline-secondary"
+                    className="btn btn-outline-secondary emoji-btn"
                     type="button"
                     onClick={onToggleEmojiPanel}
                     title="Favorite emojis"
                 >
-                    <i className="bi bi-star-fill" style={{ color: '#4C5B6F' }}></i>
+                    <i className="bi bi-star-fill"></i>
                 </button>
                 <input
                     type="text"

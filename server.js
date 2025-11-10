@@ -102,6 +102,33 @@ db.getConnection((err, connection) => {
     }
 });
 
+// Momo Code generation function
+function generateMomoCode() {
+    // Generate 12 random digits
+    let code = '';
+    for (let i = 0; i < 12; i++) {
+        code += Math.floor(Math.random() * 10);
+    }
+    // Format as xxxx-xxxx-xxxx
+    return `${code.substring(0, 4)}-${code.substring(4, 8)}-${code.substring(8, 12)}`;
+}
+
+async function generateUniqueMomoCode() {
+    let momoCode;
+    let isUnique = false;
+    
+    while (!isUnique) {
+        momoCode = generateMomoCode();
+        // Check if this code already exists
+        const [rows] = await db.promise().query('SELECT id FROM users WHERE momo_code = ?', [momoCode]);
+        if (rows.length === 0) {
+            isUnique = true;
+        }
+    }
+    
+    return momoCode;
+}
+
 // Socket.io configuration
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -234,15 +261,16 @@ app.post('/register', async (req, res) => {
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        const query = 'INSERT INTO users (username, email, password, nickname) VALUES (?, ?, ?, ?)';
-        db.query(query, [username, email, hashedPassword, nickname], (err) => {
+        const momoCode = await generateUniqueMomoCode();
+        const query = 'INSERT INTO users (username, email, password, nickname, momo_code) VALUES (?, ?, ?, ?, ?)';
+        db.query(query, [username, email, hashedPassword, nickname, momoCode], (err) => {
             if (err) {
                 if (err.code === 'ER_DUP_ENTRY') {
                     return res.status(400).json({ error: 'Username or email already exists.' });
                 }
                 return res.status(500).json({ error: 'Database error.' });
             }
-            res.json({ message: 'User registered successfully.' });
+            res.json({ message: 'User registered successfully.', momoCode });
         });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error.' });
@@ -280,6 +308,7 @@ app.post('/login', (req, res) => {
                 nickname: user.nickname,
                 avatar: user.avatar || null,
                 email: user.email,
+                momoCode: user.momo_code || null,
             });
         });
     });
@@ -410,16 +439,16 @@ app.get('/friends', authenticateToken, (req, res) => {
 });
 
 app.post('/friend/add', authenticateToken, (req, res) => {
-    const { friendUsername } = req.body;
+    const { friendMomoCode } = req.body;
     const userId = req.user.userId;
 
-    if (!friendUsername) {
-        return res.status(400).json({ error: 'Friend username is required.' });
+    if (!friendMomoCode) {
+        return res.status(400).json({ error: 'Friend Momo Code is required.' });
     }
 
     // No add myself
-    const getUserQuery = 'SELECT id FROM users WHERE username = ?';
-    db.query(getUserQuery, [friendUsername], (err, results) => {
+    const getUserQuery = 'SELECT id FROM users WHERE momo_code = ?';
+    db.query(getUserQuery, [friendMomoCode], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) return res.status(404).json({ error: 'User not found.' });
 
@@ -500,19 +529,53 @@ app.post('/upload/avatar', authenticateToken, upload.single('avatar'), async (re
         }
 
         const userId = req.user.userId;
-        const fileExtension = 'jpg'; // We'll convert all to jpg
-        const filename = `avatar_${userId}_${Date.now()}.${fileExtension}`;
-        const filepath = path.join(__dirname, 'uploads', 'avatars', filename);
+        
+        // Calculate MD5 hash of the file
+        const md5Hash = crypto.createHash('md5').update(req.file.buffer).digest('hex');
+        
+        // Check if image with this MD5 already exists
+        const [existingImages] = await db.promise().query(
+            'SELECT file_url, upload_count FROM uploaded_images WHERE md5_hash = ? AND file_type = "avatar"',
+            [md5Hash]
+        );
+        
+        let avatarUrl;
+        
+        if (existingImages.length > 0) {
+            // Image already exists, use existing URL
+            avatarUrl = existingImages[0].file_url;
+            
+            // Increment upload count and update last_used_at
+            await db.promise().query(
+                'UPDATE uploaded_images SET upload_count = upload_count + 1, last_used_at = UTC_TIMESTAMP() WHERE md5_hash = ? AND file_type = "avatar"',
+                [md5Hash]
+            );
+            
+            console.log(`Avatar reused from MD5 cache: ${md5Hash}`);
+        } else {
+            // New image, proceed with upload
+            const fileExtension = 'jpg';
+            const filename = `avatar_${userId}_${Date.now()}.${fileExtension}`;
+            const filepath = path.join(__dirname, 'uploads', 'avatars', filename);
 
-        // Process image with sharp: resize and optimize
-        await sharp(req.file.buffer)
-            .resize(400, 400, { fit: 'cover' }) // Resize to 400x400
-            .jpeg({ quality: 85 }) // Convert to JPEG with good quality
-            .toFile(filepath);
+            // Process image with sharp: resize and optimize
+            await sharp(req.file.buffer)
+                .resize(400, 400, { fit: 'cover' })
+                .jpeg({ quality: 85 })
+                .toFile(filepath);
 
-        // Generate full URL path (include server domain for frontend access)
-        const serverDomain = process.env.SERVER_URL || `http://localhost:${PORT}`;
-        const avatarUrl = `${serverDomain}/uploads/avatars/${filename}`;
+            // Generate full URL path
+            const serverDomain = process.env.SERVER_URL || `http://localhost:${PORT}`;
+            avatarUrl = `${serverDomain}/uploads/avatars/${filename}`;
+            
+            // Store MD5 and URL in database
+            await db.promise().query(
+                'INSERT INTO uploaded_images (md5_hash, file_url, file_type, file_size) VALUES (?, ?, "avatar", ?)',
+                [md5Hash, avatarUrl, req.file.size]
+            );
+            
+            console.log(`New avatar uploaded with MD5: ${md5Hash}`);
+        }
 
         // Update user's avatar in database
         const updateQuery = 'UPDATE users SET avatar = ? WHERE id = ?';
@@ -520,7 +583,8 @@ app.post('/upload/avatar', authenticateToken, upload.single('avatar'), async (re
 
         res.json({ 
             message: 'Avatar uploaded successfully.',
-            avatarUrl: avatarUrl
+            avatarUrl: avatarUrl,
+            cached: existingImages.length > 0
         });
     } catch (error) {
         console.error('Error uploading avatar:', error.message);
@@ -535,33 +599,68 @@ app.post('/upload/chat-image', authenticateToken, upload.single('image'), async 
         }
 
         const userId = req.user.userId;
-        const fileExtension = 'jpg';
-        const filename = `chat_${userId}_${Date.now()}.${fileExtension}`;
-        const filepath = path.join(__dirname, 'uploads', 'chat-images', filename);
-
-        // Process image with sharp: resize if too large and optimize
-        const image = sharp(req.file.buffer);
-        const metadata = await image.metadata();
-
-        // Resize if width > 1200px
-        if (metadata.width > 1200) {
-            await image
-                .resize(1200, null, { withoutEnlargement: true })
-                .jpeg({ quality: 85 })
-                .toFile(filepath);
+        
+        // Calculate MD5 hash of the file
+        const md5Hash = crypto.createHash('md5').update(req.file.buffer).digest('hex');
+        
+        // Check if image with this MD5 already exists
+        const [existingImages] = await db.promise().query(
+            'SELECT file_url, upload_count FROM uploaded_images WHERE md5_hash = ? AND file_type = "chat"',
+            [md5Hash]
+        );
+        
+        let imageUrl;
+        
+        if (existingImages.length > 0) {
+            // Image already exists, use existing URL
+            imageUrl = existingImages[0].file_url;
+            
+            // Increment upload count and update last_used_at
+            await db.promise().query(
+                'UPDATE uploaded_images SET upload_count = upload_count + 1, last_used_at = UTC_TIMESTAMP() WHERE md5_hash = ? AND file_type = "chat"',
+                [md5Hash]
+            );
+            
+            console.log(`Chat image reused from MD5 cache: ${md5Hash}`);
         } else {
-            await image
-                .jpeg({ quality: 85 })
-                .toFile(filepath);
-        }
+            // New image, proceed with upload
+            const fileExtension = 'jpg';
+            const filename = `chat_${userId}_${Date.now()}.${fileExtension}`;
+            const filepath = path.join(__dirname, 'uploads', 'chat-images', filename);
 
-        // Generate full URL path (include server domain for frontend access)
-        const serverDomain = process.env.SERVER_URL || `http://localhost:${PORT}`;
-        const imageUrl = `${serverDomain}/uploads/chat-images/${filename}`;
+            // Process image with sharp: resize if too large and optimize
+            const image = sharp(req.file.buffer);
+            const metadata = await image.metadata();
+
+            // Resize if width > 1200px
+            if (metadata.width > 1200) {
+                await image
+                    .resize(1200, null, { withoutEnlargement: true })
+                    .jpeg({ quality: 85 })
+                    .toFile(filepath);
+            } else {
+                await image
+                    .jpeg({ quality: 85 })
+                    .toFile(filepath);
+            }
+
+            // Generate full URL path
+            const serverDomain = process.env.SERVER_URL || `http://localhost:${PORT}`;
+            imageUrl = `${serverDomain}/uploads/chat-images/${filename}`;
+            
+            // Store MD5 and URL in database
+            await db.promise().query(
+                'INSERT INTO uploaded_images (md5_hash, file_url, file_type, file_size) VALUES (?, ?, "chat", ?)',
+                [md5Hash, imageUrl, req.file.size]
+            );
+            
+            console.log(`New chat image uploaded with MD5: ${md5Hash}`);
+        }
 
         res.json({ 
             message: 'Image uploaded successfully.',
-            imageUrl: imageUrl
+            imageUrl: imageUrl,
+            cached: existingImages.length > 0
         });
     } catch (error) {
         console.error('Error uploading chat image:', error.message);
@@ -742,13 +841,25 @@ app.get('/protected-resource', authenticateToken, (req, res) => {
     res.json({ message: 'Welcome, admin!' });
 });
 
-// User search routes
+// User search routes - Search by Momo Code only
 app.get('/users/search', authenticateToken, (req, res) => {
     const { query } = req.query;
     if (!query) return res.status(400).json({ error: 'Query parameter is required.' });
 
-    const searchQuery = 'SELECT id, username, nickname FROM users WHERE username LIKE ?';
-    db.query(searchQuery, [`%${query}%`], (err, results) => {
+    // Remove spaces and dashes from input for flexible search
+    const cleanQuery = query.replace(/[\s-]/g, '');
+    
+    // Format with dashes for database search
+    let formattedQuery;
+    if (cleanQuery.length === 12) {
+        formattedQuery = `${cleanQuery.substring(0, 4)}-${cleanQuery.substring(4, 8)}-${cleanQuery.substring(8, 12)}`;
+    } else {
+        // If not exactly 12 digits, try partial search with dashes
+        formattedQuery = query.replace(/\s+/g, ''); // Just remove spaces
+    }
+
+    const searchQuery = 'SELECT id, username, nickname, momo_code FROM users WHERE momo_code = ?';
+    db.query(searchQuery, [formattedQuery], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(results);
     });

@@ -5,7 +5,8 @@ CREATE TABLE users (
                        password VARCHAR(255) NOT NULL,
                        nickname VARCHAR(50) NOT NULL,
                        avatar VARCHAR(255) DEFAULT NULL,
-                       session_token VARCHAR(255) DEFAULT NULL
+                       session_token VARCHAR(255) DEFAULT NULL,
+                       momo_code VARCHAR(14) NOT NULL UNIQUE
 );
 
 CREATE TABLE messages (
@@ -47,6 +48,19 @@ CREATE TABLE favorite_emojis (
                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                      INDEX idx_user_id (user_id)
+);
+
+CREATE TABLE uploaded_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    md5_hash VARCHAR(32) NOT NULL UNIQUE,
+    file_url VARCHAR(500) NOT NULL,
+    file_type ENUM('avatar', 'chat') NOT NULL,
+    file_size INT NOT NULL,
+    upload_count INT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_md5_hash (md5_hash),
+    INDEX idx_file_type (file_type)
 );
 
 CREATE INDEX idx_friends_user_friend ON friends (user_id, friend_id);

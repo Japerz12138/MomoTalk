@@ -128,6 +128,27 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                     <p className="text-muted">
                         @{user.username || "Unknown Username"}
                     </p>
+                    {user.momoCode && (
+                        <div style={{ 
+                            marginTop: '10px', 
+                            marginBottom: '10px',
+                            padding: '10px',
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: '8px'
+                        }}>
+                            <small style={{ color: '#666', display: 'block', marginBottom: '5px' }}>
+                                <strong>Momo Code:</strong>
+                            </small>
+                            <div style={{ 
+                                fontSize: '1.2rem', 
+                                fontWeight: 'bold', 
+                                color: '#4C5B6F',
+                                letterSpacing: '2px'
+                            }}>
+                                {user.momoCode}
+                            </div>
+                        </div>
+                    )}
 
                     {isOwnProfile && (
                         <div className="d-grid gap-2 mt-3">

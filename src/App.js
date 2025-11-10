@@ -44,6 +44,7 @@ function App() {
     const [selectedChat, setSelectedChat] = useState(null);
     const [userId, setUserId] = useState(null);
     const [avatar, setAvatar] = useState('');
+    const [momoCode, setMomoCode] = useState('');
     const toastRef = useRef();
     const [socketInstance, setSocket] = useState(null);
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -100,6 +101,7 @@ function App() {
         const savedNickname = localStorage.getItem('nickname');
         const savedUserId = localStorage.getItem('userId');
         const savedAvatar = localStorage.getItem('avatar');
+        const savedMomoCode = localStorage.getItem('momoCode');
         // console.log('Loaded userId from localStorage:', savedUserId);
         // FOR DEBUG!
         if (savedToken) {
@@ -112,6 +114,7 @@ function App() {
         if (savedUserId) setUserId(parseInt(savedUserId, 10));
         if (savedAvatar) setAvatar(savedAvatar);
         else setAvatar(DEFAULT_AVATAR);
+        if (savedMomoCode) setMomoCode(savedMomoCode);
     }, []);
 
     // Join room only once when userId is available
@@ -423,19 +426,21 @@ function App() {
         e.preventDefault();
         try {
             const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/login`, { username, password });
-            const { token, username: loggedInUsername, nickname: loggedInNickname, userId: loggedInUserId, avatar } = response.data;
+            const { token, username: loggedInUsername, nickname: loggedInNickname, userId: loggedInUserId, avatar, momoCode: userMomoCode } = response.data;
 
             setToken(token);
             setUsername(loggedInUsername);
             setNickname(loggedInNickname);
             setUserId(loggedInUserId);
             setAvatar(avatar || DEFAULT_AVATAR);
+            setMomoCode(userMomoCode || '');
 
             localStorage.setItem('token', token);
             localStorage.setItem('username', loggedInUsername);
             localStorage.setItem('nickname', loggedInNickname);
             localStorage.setItem('userId', loggedInUserId);
             localStorage.setItem('avatar', avatar || DEFAULT_AVATAR);
+            localStorage.setItem('momoCode', userMomoCode || '');
 
             //init socket for current user
             const newSocket = initializeSocket(loggedInUserId);
@@ -482,9 +487,9 @@ function App() {
         }
     };
 
-    const handleAddFriend = async (username) => {
+    const handleAddFriend = async (momoCode) => {
         try {
-            const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/add`, { friendUsername: username }, {
+            const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/add`, { friendMomoCode: momoCode }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
@@ -500,6 +505,7 @@ function App() {
             });
         } catch (error) {
             console.error('Error adding friend:', error.response?.data?.error || error);
+            handleShowToast("Error", error.response?.data?.error || "Failed to add friend");
         }
     };
 
@@ -985,6 +991,10 @@ function App() {
                                             isMobile={true}
                                         />
                                         <SearchAndAddFriend
+                                            token={token}
+                                            loggedInUsername={username}
+                                            loggedInMomoCode={momoCode}
+                                            friendsList={friends}
                                             onAddFriend={handleAddFriend}
                                             isMobile={true}
                                         />
@@ -1026,7 +1036,7 @@ function App() {
                                 {activeSection === 'profile' && (
                                     <div style={{ height: '100%', overflow: 'auto' }}>
                                         <UserProfile
-                                            user={{ username, nickname, avatar }}
+                                            user={{ username, nickname, avatar, momoCode }}
                                             isOwnProfile={true}
                                             onClose={() => setActiveSection('chat')}
                                             onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
@@ -1127,6 +1137,7 @@ function App() {
                                         <SearchAndAddFriend
                                             token={token}
                                             loggedInUsername={username}
+                                            loggedInMomoCode={momoCode}
                                             friendsList={friends}
                                             onAddFriend={handleAddFriend}
                                         />
@@ -1187,7 +1198,7 @@ function App() {
                                 )}
                                 {activeSection === 'profile' && (
                                     <UserProfile
-                                        user={{ username, nickname, avatar }}
+                                        user={{ username, nickname, avatar, momoCode }}
                                         isOwnProfile={true}
                                         onUpdateProfile={async ({ nickname, avatar: newAvatar }) => {
                                             const updatedAvatar = newAvatar || avatar;
