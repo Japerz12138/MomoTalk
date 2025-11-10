@@ -1,26 +1,56 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import '../custom_styles/UserProfile.css';
 import { DEFAULT_AVATAR } from '../constants';
+import ImageUpload from './ImageUpload';
 
 const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpdateProfile, onClose, isMobile }) => {
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState('');
     const [newInput, setNewInput] = useState('');
     const [showRemoveFriendModal, setShowRemoveFriendModal] = useState(false);
+    const [uploadError, setUploadError] = useState('');
 
     const handleEditClick = (type) => {
         setModalType(type);
-        setNewInput(type === 'avatar' ? user.avatar || DEFAULT_AVATAR : user.nickname || '');
+        setNewInput(type === 'nickname' ? user.nickname || '' : '');
+        setUploadError('');
         setShowModal(true);
     };
 
-    const handleSave = () => {
-        if (modalType === 'avatar') {
-            onUpdateProfile({ nickname: user.nickname, avatar: newInput });
-        } else if (modalType === 'nickname') {
-            onUpdateProfile({ nickname: newInput, avatar: user.avatar });
+    const handleAvatarUpload = async (file) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found');
         }
-        setShowModal(false);
+
+        const formData = new FormData();
+        formData.append('avatar', file);
+
+        try {
+            const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/upload/avatar`, formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            if (response.data.avatarUrl) {
+                // Update the profile with new avatar URL
+                onUpdateProfile({ nickname: user.nickname, avatar: response.data.avatarUrl });
+                setShowModal(false);
+            }
+        } catch (error) {
+            console.error('Error uploading avatar:', error);
+            throw new Error(error.response?.data?.error || 'Failed to upload avatar');
+        }
+    };
+
+    const handleSave = () => {
+        if (modalType === 'nickname') {
+            onUpdateProfile({ nickname: newInput, avatar: user.avatar });
+            setShowModal(false);
+        }
     };
 
     return (
@@ -147,33 +177,47 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                 ></button>
                             </div>
                             <div className="modal-body">
-                                <label htmlFor="inputField" className="form-label">
-                                    {modalType === 'avatar' ? 'Enter new avatar URL:' : 'Enter new nickname:'}
-                                </label>
-                                <input
-                                    id="inputField"
-                                    type="text"
-                                    className="form-control"
-                                    value={newInput}
-                                    onChange={(e) => setNewInput(e.target.value)}
-                                />
+                                {modalType === 'avatar' ? (
+                                    <div>
+                                        <label className="form-label">Upload new avatar image:</label>
+                                        <ImageUpload 
+                                            onUpload={handleAvatarUpload}
+                                            buttonText="Upload Avatar"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label htmlFor="inputField" className="form-label">
+                                            Enter new nickname:
+                                        </label>
+                                        <input
+                                            id="inputField"
+                                            type="text"
+                                            className="form-control"
+                                            value={newInput}
+                                            onChange={(e) => setNewInput(e.target.value)}
+                                        />
+                                    </div>
+                                )}
                             </div>
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setShowModal(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    onClick={handleSave}
-                                >
-                                    Save
-                                </button>
-                            </div>
+                            {modalType === 'nickname' && (
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => setShowModal(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={handleSave}
+                                    >
+                                        Save
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

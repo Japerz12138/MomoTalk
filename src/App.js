@@ -12,6 +12,7 @@ import Sidebar from './components/Sidebar';
 import ToastContainer from "./components/ToastContainer";
 import UserProfile from "./components/UserProfile";
 import SettingsPage from "./components/SettingsPage";
+import EmojiPanel from "./components/EmojiPanel";
 import './App.css';
 import styles from './styles';
 import { DEFAULT_AVATAR } from './constants';
@@ -51,6 +52,7 @@ function App() {
         JSON.parse(localStorage.getItem('unreadMessagesCount')) || {}
     );
     const [showNotificationModal, setShowNotificationModal] = useState(false);
+    const [showEmojiPanel, setShowEmojiPanel] = useState(false);
     
     // Mobile-specific states
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -112,16 +114,13 @@ function App() {
         else setAvatar(DEFAULT_AVATAR);
     }, []);
 
+    // Join room only once when userId is available
     useEffect(() => {
-        if (token) {
-            fetchFriends();
-            fetchFriendRequests();
-            if (userId) {
-                socket.emit('join_room', userId);
-                console.log(`Socket connected for userId: ${userId}`);
-            }
+        if (userId) {
+            socket.emit('join_room', userId);
+            console.log(`Socket connected for userId: ${userId}`);
         }
-    }, [token, userId]);
+    }, [userId]);
 
     useEffect(() => {
         const interceptor = axios.interceptors.response.use(
@@ -138,78 +137,49 @@ function App() {
         return () => axios.interceptors.response.eject(interceptor);
     }, []);
 
+    // Fetch friends and requests when token is available
     useEffect(() => {
-        if (token && username) {
-            socket.emit('join_room', username);
-            console.log(`Joined room for user: ${username}`);
-
-            socket.on('receive_message', (message) => {
-                //Create new notification
-                if (Notification.permission === 'granted') {
-                    const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
-                        body: message.text,
-                        icon: message.avatar || DEFAULT_AVATAR,
-                    });
-
-                    notification.onclick = () => {
-                        window.focus();
-                    };
-
-                }
-                const senderFriend = friends.find((friend) => friend.id === message.senderId);
-                const updatedMessage = {
-                    ...message,
-                    avatar: senderFriend ? senderFriend.avatar : DEFAULT_AVATAR,
-                };
-
-                setDms((prevDms) => {
-                    const isDuplicate = prevDms.some((dm) => dm.id === updatedMessage.id);
-                    return isDuplicate ? prevDms : [...prevDms, updatedMessage];
-                });
-            });
-
-            socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
-                fetchFriendRequests();
-                fetchFriends();
-            });
-
-            return () => {
-                socket.off('receive_message');
-                socket.off('receive_friend_request');
-            };
+        if (token) {
+            fetchFriends();
+            fetchFriendRequests();
         }
-    }, [token, username]);
+    }, [token]);
 
+    // Handle incoming messages - NO join_room here!
     useEffect(() => {
-        if (userId) {
-            socket.emit('join_room', userId);
+        if (!userId) return;
 
-            socket.on('receive_message', (message) => {
-                console.log('Received message:', message);
+        const handleReceiveMessage = (message) => {
+            console.log('Received message:', message);
 
-                //Check Local Storge notification settings
-                const isInternalNotificationEnabled = JSON.parse(localStorage.getItem("internalNotificationEnabled")) || false;
+            //Check Local Storge notification settings
+            const isInternalNotificationEnabled = JSON.parse(localStorage.getItem("internalNotificationEnabled")) || false;
 
-                if (Notification.permission === 'granted' && isInternalNotificationEnabled) {
-                    const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
-                        body: message.text,
-                        icon: message.avatar || DEFAULT_AVATAR,
-                    });
+            if (Notification.permission === 'granted' && isInternalNotificationEnabled) {
+                // Show appropriate notification text based on message type
+                const notificationBody = message.text || (message.imageUrl ? '[Image]' : 'New message');
+                const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
+                    body: notificationBody,
+                    icon: message.avatar || DEFAULT_AVATAR,
+                });
 
-                    notification.onclick = () => {
-                        window.focus();
-                    };
-                }
+                notification.onclick = () => {
+                    window.focus();
+                };
+            }
 
-                const friendId = message.senderId === userId ? message.receiverId : message.senderId;
-                const senderFriend = friends.find((friend) => friend.id === friendId);
+            const friendId = message.senderId === userId ? message.receiverId : message.senderId;
 
+            setFriends((prevFriends) => {
+                const senderFriend = prevFriends.find((friend) => friend.id === friendId);
+                
                 const updatedMessage = {
                     ...message,
                     avatar: senderFriend ? senderFriend.avatar : DEFAULT_AVATAR,
                     self: message.senderId === userId,
                 };
 
+                // Update unread count if not viewing this friend's chat
                 if (!selectedFriend || friendId !== selectedFriend.id) {
                     setUnreadMessagesCount((prev) => {
                         const updated = {
@@ -223,30 +193,31 @@ function App() {
                     setDms((prevDms) => [...prevDms, updatedMessage]);
                 }
 
-                setFriends((prevFriends) =>
-                    prevFriends.map((friend) =>
-                        friend.id === friendId
-                            ? {
-                                ...friend,
-                                lastMessage: message.text,
-                                lastMessageTime: message.timestamp,
-                                avatar: senderFriend ? senderFriend.avatar : friend.avatar,
-                            }
-                            : friend
-                    )
-                );
-
                 setMessages((prevMessages) => {
                     const updatedMessages = [...prevMessages, message];
                     return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 });
-            });
 
-            return () => {
-                socket.off('receive_message');
-            };
-        }
-    }, [userId, selectedFriend, friends]);
+                return prevFriends.map((friend) =>
+                    friend.id === friendId
+                        ? {
+                            ...friend,
+                            lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
+                            lastMessageTime: message.timestamp,
+                            imageUrl: message.imageUrl,
+                            avatar: senderFriend ? senderFriend.avatar : friend.avatar,
+                        }
+                        : friend
+                );
+            });
+        };
+
+        socket.on('receive_message', handleReceiveMessage);
+
+        return () => {
+            socket.off('receive_message', handleReceiveMessage);
+        };
+    }, [userId, selectedFriend]);
 
     useEffect(() => {
         socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
@@ -300,10 +271,34 @@ function App() {
             );
         });
 
+        // Handle batch status updates
+        socket.on('friends_status_response', (statusUpdates) => {
+            setFriends((prevFriends) =>
+                prevFriends.map((friend) => {
+                    const update = statusUpdates.find(s => s.friendId === friend.id);
+                    return update ? { ...friend, isOnline: update.isOnline } : friend;
+                })
+            );
+        });
+
         return () => {
             socket.off('friend_status_update');
+            socket.off('friends_status_response');
         };
     }, []);
+
+    // Request friends status when page becomes visible again
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden && friends.length > 0) {
+                const friendIds = friends.map(f => f.id);
+                socket.emit('request_friends_status', friendIds);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [friends]);
 
     useEffect(() => {
         if (activeSection === 'friend-list') {
@@ -408,6 +403,12 @@ function App() {
         try {
             const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/friends`);
             setFriends(response.data);
+            
+            // Request fresh online status after fetching friends
+            if (response.data.length > 0) {
+                const friendIds = response.data.map(f => f.id);
+                socket.emit('request_friends_status', friendIds);
+            }
         } catch (error) {
             if (error.response?.status === 401) {
                 console.error('Unauthorized! Clearing token.');
@@ -664,6 +665,55 @@ function App() {
         }
     };
 
+    const handleImageUpload = (imageUrl) => {
+        if (imageUrl && selectedFriend) {
+            const newMessage = {
+                senderId: userId,
+                receiverId: selectedFriend.id,
+                text: input.trim() || null, // Include text if there is any
+                imageUrl: imageUrl,
+                timestamp: new Date().toISOString(),
+                avatar: nickname,
+            };
+
+            console.log('Sending image message:', newMessage);
+
+            socket.emit('send_message', newMessage);
+
+            setMessages((prevMessages) => {
+                const updatedMessages = [...prevMessages, { ...newMessage, self: true }];
+                return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            });
+
+            setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
+
+            setInput(''); // Clear text input after sending
+
+            //Update messageList to show latest messages with image indicator
+            setFriends((prevFriends) =>
+                prevFriends.map((friend) =>
+                    friend.id === selectedFriend.id
+                        ? {
+                            ...friend,
+                            lastMessage: newMessage.text || '[Image]',
+                            lastMessageTime: newMessage.timestamp,
+                            imageUrl: imageUrl,
+                        }
+                        : friend
+                )
+            );
+        }
+    };
+
+    const handleToggleEmojiPanel = () => {
+        setShowEmojiPanel(prev => !prev);
+    };
+
+    const handleSelectEmoji = (imageUrl) => {
+        // Send the emoji as an image message
+        handleImageUpload(imageUrl);
+    };
+
     const handleDeleteDMs = async () => {
         if (selectedFriend) {
             try {
@@ -887,7 +937,8 @@ function App() {
                                                 id: friend.id,
                                                 username: friend.username,
                                                 nickname: friend.nickname,
-                                                text: friend.lastMessage || 'No messages yet.',
+                                                text: friend.lastMessage || null,
+                                                imageUrl: friend.imageUrl || null,
                                                 timestamp: friend.lastMessageTime || friend.addedAt || null,
                                                 avatar: friend.avatar,
                                                 isOnline: friend.isOnline,
@@ -1015,6 +1066,8 @@ function App() {
                                         input={input}
                                         onInputChange={(e) => setInput(e.target.value)}
                                         onSendMessage={handleSendDM}
+                                        onImageUpload={handleImageUpload}
+                                        onToggleEmojiPanel={handleToggleEmojiPanel}
                                     />
                                 </div>
                             )}
@@ -1045,7 +1098,8 @@ function App() {
                                             id: friend.id,
                                             username: friend.username,
                                             nickname: friend.nickname,
-                                            text: friend.lastMessage || 'No messages yet.',
+                                            text: friend.lastMessage || null,
+                                            imageUrl: friend.imageUrl || null,
                                             timestamp: friend.lastMessageTime || friend.addedAt || null,
                                             avatar: friend.avatar,
                                             isOnline: friend.isOnline,
@@ -1086,6 +1140,7 @@ function App() {
                                     display: 'flex',
                                     flexDirection: 'column',
                                     backgroundColor: '#fff',
+                                    position: 'relative'
                                 }}
                             >
                                 {activeSection === 'chat' && selectedFriend && (
@@ -1095,13 +1150,25 @@ function App() {
                                             currentChat={selectedFriend ? selectedFriend.nickname : 'Select a conversation'}
                                             friend={selectedFriend}
                                             isMobile={false}
+                                            onImageUpload={handleImageUpload}
                                         />
                                         <MessageInput
                                             input={input}
                                             onInputChange={(e) => setInput(e.target.value)}
                                             onSendMessage={selectedFriend ? handleSendDM : null}
+                                            onImageUpload={handleImageUpload}
+                                            onToggleEmojiPanel={handleToggleEmojiPanel}
                                             isMobile={false}
                                         />
+                                        {/* Emoji Panel for Desktop */}
+                                        {!isMobile && (
+                                            <EmojiPanel
+                                                show={showEmojiPanel}
+                                                onClose={() => setShowEmojiPanel(false)}
+                                                onSelectEmoji={handleSelectEmoji}
+                                                isMobile={false}
+                                            />
+                                        )}
                                     </>
                                 )}
                                 {activeSection === 'friend-list' && selectedFriend && (
@@ -1154,6 +1221,16 @@ function App() {
                                 )}
                             </div>
                         </div>
+                    )}
+
+                    {/* Emoji Panel for Mobile */}
+                    {isMobile && (
+                        <EmojiPanel
+                            show={showEmojiPanel}
+                            onClose={() => setShowEmojiPanel(false)}
+                            onSelectEmoji={handleSelectEmoji}
+                            isMobile={true}
+                        />
                     )}
                 </>
             )}

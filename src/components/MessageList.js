@@ -52,11 +52,13 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                         position: 'absolute',
                                         bottom: 0,
                                         right: '7px',
-                                        width: '15px',
-                                        height: '15px',
-                                        backgroundColor: 'green',
+                                        width: '12px',
+                                        height: '12px',
+                                        backgroundColor: '#28a745',
                                         borderRadius: '50%',
-                                        border: '3px solid white',
+                                        boxShadow: '0 0 0 2.5px white',
+                                        display: 'block',
+                                        flexShrink: 0,
                                     }}
                                 ></span>
                             )}
@@ -80,7 +82,21 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                 <small>{formatDate(msg.timestamp)}</small>
                             </div>
                             <p className="mb-0 text-muted">
-                                {msg.text.length > 10 ? `${msg.text.slice(0, 10)}...` : msg.text}
+                                {msg.imageUrl && msg.text ? (
+                                    // Image with text: show icon + text preview
+                                    <span>
+                                        <i className="bi bi-image"></i> {msg.text.length > 8 ? `${msg.text.slice(0, 8)}...` : msg.text}
+                                    </span>
+                                ) : msg.imageUrl ? (
+                                    // Image only
+                                    <span><i className="bi bi-image"></i> Image</span>
+                                ) : msg.text ? (
+                                    // Text only
+                                    msg.text.length > 10 ? `${msg.text.slice(0, 10)}...` : msg.text
+                                ) : (
+                                    // No message
+                                    'No messages yet.'
+                                )}
                             </p>
                         </div>
                     </div>

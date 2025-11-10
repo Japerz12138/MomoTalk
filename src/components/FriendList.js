@@ -34,11 +34,13 @@ const FriendList = ({ friends, onSelectFriend }) => {
                                         position: 'absolute',
                                         bottom: 0,
                                         right: '7px',
-                                        width: '15px',
-                                        height: '15px',
-                                        backgroundColor: 'green',
+                                        width: '12px',
+                                        height: '12px',
+                                        backgroundColor: '#28a745',
                                         borderRadius: '50%',
-                                        border: '3px solid white',
+                                        boxShadow: '0 0 0 2.5px white',
+                                        display: 'block',
+                                        flexShrink: 0,
                                     }}
                                 ></span>
                             )}

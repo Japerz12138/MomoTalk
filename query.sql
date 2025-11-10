@@ -33,9 +33,20 @@ CREATE TABLE dms (
                      sender_id INT NOT NULL,
                      receiver_id INT NOT NULL,
                      text TEXT NOT NULL,
+                     image_url VARCHAR(500) DEFAULT NULL,
+                     message_type ENUM('text', 'image', 'both') DEFAULT 'text' AFTER image_url,
                      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                      FOREIGN KEY (sender_id) REFERENCES users(id),
                      FOREIGN KEY (receiver_id) REFERENCES users(id)
+);
+
+CREATE TABLE favorite_emojis (
+                     id INT AUTO_INCREMENT PRIMARY KEY,
+                     user_id INT NOT NULL,
+                     image_url VARCHAR(500) NOT NULL,
+                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                     INDEX idx_user_id (user_id)
 );
 
 CREATE INDEX idx_friends_user_friend ON friends (user_id, friend_id);

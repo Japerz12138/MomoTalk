@@ -8,6 +8,10 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const mysql = require('mysql2');
 const { Server } = require('socket.io');
+const multer = require('multer');
+const sharp = require('sharp');
+const fs = require('fs');
+const path = require('path');
 
 // Server configuration
 const PORT = process.env.PORT || 5000;
@@ -51,8 +55,39 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static files from React build
-const path = require('path');
 app.use(express.static(path.join(__dirname, 'build')));
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Create uploads directories if they don't exist
+const uploadDirs = ['uploads/avatars', 'uploads/chat-images'];
+uploadDirs.forEach(dir => {
+    const dirPath = path.join(__dirname, dir);
+    if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+        console.log(`Created directory: ${dir}`);
+    }
+});
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage(); // Store files in memory for processing with sharp
+
+const fileFilter = (req, file, cb) => {
+    // Accept images only
+    if (!file.mimetype.startsWith('image/')) {
+        return cb(new Error('Only image files are allowed!'), false);
+    }
+    cb(null, true);
+};
+
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    }
+});
 
 // Database connection
 const db = mysql.createPool(DB_CONFIG);
@@ -91,6 +126,18 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Request online status for all friends
+    socket.on('request_friends_status', (friendIds) => {
+        if (!Array.isArray(friendIds)) return;
+        
+        const statusUpdates = friendIds.map(friendId => ({
+            friendId: friendId,
+            isOnline: onlineUsers.has(friendId)
+        }));
+        
+        socket.emit('friends_status_response', statusUpdates);
+    });
+
     socket.on('disconnect', () => {
         const userId = Array.from(onlineUsers.entries()).find(([, id]) => id === socket.id)?.[0];
         if (userId) {
@@ -109,15 +156,23 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_message', (data) => {
-        const { senderId, receiverId, text } = data;
+        const { senderId, receiverId, text, imageUrl } = data;
 
-        if (!senderId || !receiverId || !text) {
+        if (!senderId || !receiverId || (!text && !imageUrl)) {
             console.error('Invalid message payload:', data);
             return;
         }
 
-        const query = 'INSERT INTO dms (sender_id, receiver_id, text, timestamp) VALUES (?, ?, ?, UTC_TIMESTAMP());';
-        db.query(query, [senderId, receiverId, text], (err) => {
+        // Determine message type
+        let messageType = 'text';
+        if (text && imageUrl) {
+            messageType = 'both';
+        } else if (imageUrl) {
+            messageType = 'image';
+        }
+
+        const query = 'INSERT INTO dms (sender_id, receiver_id, text, image_url, message_type, timestamp) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP());';
+        db.query(query, [senderId, receiverId, text || null, imageUrl || null, messageType], (err) => {
             if (!err) {
                 const userQuery = 'SELECT nickname, avatar FROM users WHERE id = ?';
                 db.query(userQuery, [senderId], (userErr, userResults) => {
@@ -128,6 +183,8 @@ io.on('connection', (socket) => {
                             senderId,
                             receiverId,
                             text,
+                            imageUrl,
+                            messageType,
                             timestamp: new Date().toISOString(), //TO UTC TIME
                             nickname,
                             avatar,
@@ -324,19 +381,31 @@ app.get('/friends', authenticateToken, (req, res) => {
                 FROM dms d
                 WHERE (d.sender_id = u.id AND d.receiver_id = ?)
                    OR (d.sender_id = ? AND d.receiver_id = u.id)
-                ORDER BY d.timestamp DESC LIMIT 1) AS lastMessageTime
+                ORDER BY d.timestamp DESC LIMIT 1) AS lastMessageTime,
+               (SELECT d.image_url
+                FROM dms d
+                WHERE (d.sender_id = u.id AND d.receiver_id = ?)
+                   OR (d.sender_id = ? AND d.receiver_id = u.id)
+                ORDER BY d.timestamp DESC LIMIT 1) AS imageUrl
         FROM users u
                  JOIN friends f ON
             ((f.user_id = ? AND f.friend_id = u.id) OR (f.friend_id = ? AND f.user_id = u.id))
                 AND f.status = 'accepted';
     `;
 
-    db.query(friendsQuery, [userId, userId, userId, userId, userId, userId], (err, results) => {
+    db.query(friendsQuery, [userId, userId, userId, userId, userId, userId, userId, userId], (err, results) => {
         if (err) {
             // console.error('Error executing friends query:', err.message); // For DEBUG
             return res.status(500).json({ error: 'Failed to fetch friends' });
         }
-        res.json(results);
+        
+        // Add online status to each friend based on onlineUsers map
+        const friendsWithStatus = results.map(friend => ({
+            ...friend,
+            isOnline: onlineUsers.has(friend.id)
+        }));
+        
+        res.json(friendsWithStatus);
     });
 });
 
@@ -421,6 +490,83 @@ app.get('/friend/requests', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(results);
     });
+});
+
+// File upload routes
+app.post('/upload/avatar', authenticateToken, upload.single('avatar'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded.' });
+        }
+
+        const userId = req.user.userId;
+        const fileExtension = 'jpg'; // We'll convert all to jpg
+        const filename = `avatar_${userId}_${Date.now()}.${fileExtension}`;
+        const filepath = path.join(__dirname, 'uploads', 'avatars', filename);
+
+        // Process image with sharp: resize and optimize
+        await sharp(req.file.buffer)
+            .resize(400, 400, { fit: 'cover' }) // Resize to 400x400
+            .jpeg({ quality: 85 }) // Convert to JPEG with good quality
+            .toFile(filepath);
+
+        // Generate full URL path (include server domain for frontend access)
+        const serverDomain = process.env.SERVER_URL || `http://localhost:${PORT}`;
+        const avatarUrl = `${serverDomain}/uploads/avatars/${filename}`;
+
+        // Update user's avatar in database
+        const updateQuery = 'UPDATE users SET avatar = ? WHERE id = ?';
+        await db.promise().query(updateQuery, [avatarUrl, userId]);
+
+        res.json({ 
+            message: 'Avatar uploaded successfully.',
+            avatarUrl: avatarUrl
+        });
+    } catch (error) {
+        console.error('Error uploading avatar:', error.message);
+        res.status(500).json({ error: 'Failed to upload avatar.' });
+    }
+});
+
+app.post('/upload/chat-image', authenticateToken, upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded.' });
+        }
+
+        const userId = req.user.userId;
+        const fileExtension = 'jpg';
+        const filename = `chat_${userId}_${Date.now()}.${fileExtension}`;
+        const filepath = path.join(__dirname, 'uploads', 'chat-images', filename);
+
+        // Process image with sharp: resize if too large and optimize
+        const image = sharp(req.file.buffer);
+        const metadata = await image.metadata();
+
+        // Resize if width > 1200px
+        if (metadata.width > 1200) {
+            await image
+                .resize(1200, null, { withoutEnlargement: true })
+                .jpeg({ quality: 85 })
+                .toFile(filepath);
+        } else {
+            await image
+                .jpeg({ quality: 85 })
+                .toFile(filepath);
+        }
+
+        // Generate full URL path (include server domain for frontend access)
+        const serverDomain = process.env.SERVER_URL || `http://localhost:${PORT}`;
+        const imageUrl = `${serverDomain}/uploads/chat-images/${filename}`;
+
+        res.json({ 
+            message: 'Image uploaded successfully.',
+            imageUrl: imageUrl
+        });
+    } catch (error) {
+        console.error('Error uploading chat image:', error.message);
+        res.status(500).json({ error: 'Failed to upload image.' });
+    }
 });
 
 app.post('/user/update', authenticateToken, async (req, res) => {
@@ -574,7 +720,7 @@ app.get('/dm/:friendId', authenticateToken, (req, res) => {
     const userId = req.user.userId;
 
     const getDMQuery = `
-        SELECT dms.id, dms.text, dms.timestamp,
+        SELECT dms.id, dms.text, dms.image_url AS imageUrl, dms.message_type AS messageType, dms.timestamp,
                dms.sender_id AS senderId, dms.receiver_id AS receiverId,
                (dms.sender_id = ?) AS self -- Calculate for self directly so front-end don't have to do it
         FROM dms
@@ -616,6 +762,71 @@ app.post('/dm/delete', authenticateToken, (req, res) => {
     db.query(deleteDMQuery, [userId, friendId, friendId, userId], (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ message: 'DM history deleted' });
+    });
+});
+
+// Emoji favorites routes
+app.post('/emojis/favorite', authenticateToken, (req, res) => {
+    const { imageUrl } = req.body;
+    const userId = req.user.userId;
+
+    if (!imageUrl) {
+        return res.status(400).json({ error: 'Image URL is required' });
+    }
+
+    // Check if already exists
+    const checkQuery = 'SELECT id FROM favorite_emojis WHERE user_id = ? AND image_url = ?';
+    db.query(checkQuery, [userId, imageUrl], (err, results) => {
+        if (err) {
+            console.error('Error checking emoji:', err.message);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        if (results.length > 0) {
+            return res.status(409).json({ error: 'Emoji already in favorites' });
+        }
+
+        // Insert new favorite
+        const insertQuery = 'INSERT INTO favorite_emojis (user_id, image_url) VALUES (?, ?)';
+        db.query(insertQuery, [userId, imageUrl], (insertErr) => {
+            if (insertErr) {
+                console.error('Error saving emoji:', insertErr.message);
+                return res.status(500).json({ error: 'Failed to save emoji' });
+            }
+            res.json({ message: 'Emoji added to favorites' });
+        });
+    });
+});
+
+app.get('/emojis/favorites', authenticateToken, (req, res) => {
+    const userId = req.user.userId;
+
+    const query = 'SELECT id, image_url, created_at FROM favorite_emojis WHERE user_id = ? ORDER BY created_at DESC';
+    db.query(query, [userId], (err, results) => {
+        if (err) {
+            console.error('Error fetching favorite emojis:', err.message);
+            return res.status(500).json({ error: 'Failed to fetch favorites' });
+        }
+        res.json(results);
+    });
+});
+
+app.delete('/emojis/favorite/:id', authenticateToken, (req, res) => {
+    const emojiId = req.params.id;
+    const userId = req.user.userId;
+
+    const deleteQuery = 'DELETE FROM favorite_emojis WHERE id = ? AND user_id = ?';
+    db.query(deleteQuery, [emojiId, userId], (err, results) => {
+        if (err) {
+            console.error('Error deleting emoji:', err.message);
+            return res.status(500).json({ error: 'Failed to delete emoji' });
+        }
+        
+        if (results.affectedRows === 0) {
+            return res.status(404).json({ error: 'Emoji not found' });
+        }
+
+        res.json({ message: 'Emoji removed from favorites' });
     });
 });
 
