@@ -161,7 +161,7 @@ function App() {
             //Check Local Storge notification settings
             const isInternalNotificationEnabled = JSON.parse(localStorage.getItem("internalNotificationEnabled")) || false;
 
-            if (Notification.permission === 'granted' && isInternalNotificationEnabled) {
+            if ('Notification' in window && Notification.permission === 'granted' && isInternalNotificationEnabled) {
                 // Show appropriate notification text based on message type
                 const notificationBody = message.text || (message.imageUrl ? '[Image]' : 'New message');
                 const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
@@ -318,6 +318,11 @@ function App() {
 
     //Check if have broswer notification permission
     useEffect(() => {
+        // Another Fix apple 
+        if (!('Notification' in window)) {
+            return;
+        }
+        
         const notificationDismissed = localStorage.getItem('notificationDismissed');
         if (Notification.permission === 'default' && !notificationDismissed) {
             setShowNotificationModal(true);
@@ -325,6 +330,12 @@ function App() {
     }, []);
 
     const handleRequestNotificationPermission = () => {
+        if (!('Notification' in window)) {
+            alert('Notifications are not supported on this device/browser.');
+            setShowNotificationModal(false);
+            return;
+        }
+        
         Notification.requestPermission().then((permission) => {
             setShowNotificationModal(false);
             console.log(`Notification permission: ${permission}`);
