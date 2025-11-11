@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DEFAULT_AVATAR } from '../constants';
+import { getFullImageUrl } from '../utils/imageHelper';
 
 function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
     const [selectedMessageId, setSelectedMessageId] = useState(null);
@@ -83,7 +84,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                     >
                         <div style={{ position: 'relative' }}>
                             <img
-                                src={msg.avatar || DEFAULT_AVATAR}
+                                src={getFullImageUrl(msg.avatar || DEFAULT_AVATAR)}
                                 alt={msg.nickname}
                                 className="rounded-circle me-2"
                                 style={{ width: '40px', height: '40px', objectFit: 'cover' }}

@@ -3,6 +3,7 @@ import axios from 'axios';
 import '../custom_styles/UserProfile.css';
 import { DEFAULT_AVATAR } from '../constants';
 import ImageUpload from './ImageUpload';
+import { getFullImageUrl } from '../utils/imageHelper';
 
 const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpdateProfile, onClose, isMobile }) => {
     const [showModal, setShowModal] = useState(false);
@@ -100,7 +101,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                 <div className="card-body text-center">
                     <div style={{ position: 'relative', display: 'inline-block' }}>
                         <img
-                            src={user.avatar || DEFAULT_AVATAR}
+                            src={getFullImageUrl(user.avatar || DEFAULT_AVATAR)}
                             alt="Avatar"
                             className="rounded-circle mb-3"
                             style={{ width: '120px', height: '120px', objectFit: 'cover' }}

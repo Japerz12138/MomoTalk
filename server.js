@@ -57,8 +57,99 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Serve static files from React build
 app.use(express.static(path.join(__dirname, 'build')));
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Image access authentication
+app.get('/uploads/*', async (req, res) => {
+    // Check Referer to prevent direct URL access
+    const referer = req.get('Referer') || req.get('Referrer');
+    if (!referer || !referer.startsWith(HOST_DOMAIN)) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Extract path without query parameters
+    const imagePath = req.path.split('?')[0]; // 例如: /uploads/avatars/avatar_1_xxx.jpg
+    const filePath = path.join(__dirname, imagePath);
+    
+    // SECURITY CHECK
+    const normalizedPath = path.normalize(filePath);
+    const uploadsDir = path.normalize(path.join(__dirname, 'uploads'));
+    if (!normalizedPath.startsWith(uploadsDir)) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    // Try to get userId from token (optional for images accessed from app)
+    let userId = null;
+    const token = req.headers['authorization']?.split(' ')[1] || req.query.token;
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, SECRET_KEY);
+            const { userId: decodedUserId, sessionToken } = decoded;
+            const [results] = await db.promise().query('SELECT session_token FROM users WHERE id = ?', [decodedUserId]);
+            if (results.length > 0 && results[0].session_token === sessionToken) {
+                userId = decodedUserId;
+            }
+        } catch (err) {
+            // Token invalid, but continue if Referer is valid
+        }
+    }
+    
+    // Check Access
+    try {
+        const filename = imagePath.split('/').pop();
+        
+        // If user is authenticated, check permissions
+        if (userId) {
+            // Check if is avatar (match by exact path or filename)
+            const [avatarUsers] = await db.promise().query(
+                'SELECT id FROM users WHERE avatar = ? OR avatar LIKE ? OR avatar LIKE ?',
+                [imagePath, `%${filename}`, `%/${filename}`]
+            );
+            
+            if (avatarUsers.length > 0) {
+                const avatarOwnerId = avatarUsers[0].id;
+                // Allow avatar owner and friends to access
+                if (avatarOwnerId === userId) {
+                    return res.sendFile(filePath);
+                }
+                
+                // Check if is friend
+                const [friendship] = await db.promise().query(
+                    `SELECT * FROM friends 
+                     WHERE ((user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)) 
+                     AND status = 'accepted'`,
+                    [userId, avatarOwnerId, avatarOwnerId, userId]
+                );
+                
+                if (friendship.length > 0) {
+                    return res.sendFile(filePath);
+                }
+            }
+            
+            // Check if is chat image (match by exact path or filename)
+            const [chatImages] = await db.promise().query(
+                `SELECT sender_id, receiver_id FROM dms 
+                 WHERE (image_url = ? OR image_url LIKE ? OR image_url LIKE ?)
+                 AND (sender_id = ? OR receiver_id = ?)`,
+                [imagePath, `%${filename}`, `%/${filename}`, userId, userId]
+            );
+            
+            if (chatImages.length > 0) {
+                return res.sendFile(filePath);
+            }
+        }
+        
+        // If no userId but Referer is valid, allow access (from app)
+        // This handles old images without token
+        return res.sendFile(filePath);
+    } catch (error) {
+        console.error('Error checking image access:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
 // Create uploads directories if they don't exist
 const uploadDirs = ['uploads/avatars', 'uploads/chat-images'];
@@ -316,7 +407,7 @@ app.post('/login', (req, res) => {
 });
 
 function authenticateToken(req, res, next) {
-    const token = req.headers['authorization']?.split(' ')[1];
+    const token = req.headers['authorization']?.split(' ')[1] || req.query.token;
     if (!token) return res.status(401).json({ error: 'No token provided' });
 
     jwt.verify(token, SECRET_KEY, (err, decoded) => {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DEFAULT_AVATAR } from '../constants';
+import { getFullImageUrl } from '../utils/imageHelper';
 
 const FriendList = ({ friends, onSelectFriend }) => {
     const [selectedFriendId, setSelectedFriendId] = useState(null);
@@ -65,7 +66,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
                     >
                         <div style={{ position: 'relative' }}>
                             <img
-                                src={friend.avatar || DEFAULT_AVATAR}
+                                src={getFullImageUrl(friend.avatar || DEFAULT_AVATAR)}
                                 alt={friend.nickname || friend.username}
                                 className="rounded-circle me-2"
                                 style={{ width: '40px', height: '40px', objectFit: 'cover' }}

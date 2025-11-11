@@ -178,7 +178,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                         <i className="bi bi-arrow-left"></i>
                     </button>
                     <img
-                        src={friend?.avatar || DEFAULT_AVATAR}
+                        src={getFullImageUrl(friend?.avatar || DEFAULT_AVATAR)}
                         alt="avatar"
                         width="32"
                         height="32"
@@ -208,7 +208,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                         >
                             {!message.self && (
                                 <img
-                                    src={message.avatar || DEFAULT_AVATAR}
+                                    src={getFullImageUrl(message.avatar || DEFAULT_AVATAR)}
                                     alt="avatar"
                                     width="40"
                                     height="40"

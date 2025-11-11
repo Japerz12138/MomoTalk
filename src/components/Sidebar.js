@@ -2,6 +2,7 @@ import React from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import UserMenu from './UserMenu';
 import { DEFAULT_AVATAR } from '../constants';
+import { getFullImageUrl } from '../utils/imageHelper';
 
 const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChange, nickname, username, avatar, isMobile, onClose }) => {
     return (
@@ -23,7 +24,7 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                 }}>
                     <div className="d-flex align-items-center">
                         <img
-                            src={avatar || DEFAULT_AVATAR}
+                            src={getFullImageUrl(avatar || DEFAULT_AVATAR)}
                             alt="Avatar"
                             className="rounded-circle me-3"
                             style={{

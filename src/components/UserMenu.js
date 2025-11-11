@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { DEFAULT_AVATAR } from '../constants';
+import { getFullImageUrl } from '../utils/imageHelper';
 
 function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMobile }) {
     const [showMenu, setShowMenu] = useState(false);
@@ -41,7 +42,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMob
                     style={{ cursor: 'pointer' }}
                 >
                     <img
-                        src={avatar || DEFAULT_AVATAR}
+                        src={getFullImageUrl(avatar || DEFAULT_AVATAR)}
                         alt="Avatar"
                         className="rounded-circle"
                         style={{
@@ -163,7 +164,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMob
                             {/* User info */}
                             <div className="d-flex align-items-center mb-3">
                                 <img
-                                    src={avatar || DEFAULT_AVATAR}
+                                    src={getFullImageUrl(avatar || DEFAULT_AVATAR)}
                                     alt="Avatar"
                                     className="rounded-circle me-3"
                                     style={{
