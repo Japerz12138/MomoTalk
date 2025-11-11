@@ -1,38 +1,89 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { DEFAULT_AVATAR } from '../constants';
 import MessageInput from './MessageInput';
 import { getFullImageUrl } from '../utils/imageHelper';
 
-const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onImageUpload, onToggleEmojiPanel }) => {
+const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue }) => {
     const chatEndRef = useRef(null);
+    const chatContainerRef = useRef(null);
     const [hoveredMessageIndex, setHoveredMessageIndex] = useState(null);
     const [hoveredImageIndex, setHoveredImageIndex] = useState(null);
     const [fullImageView, setFullImageView] = useState(null);
     const [savingEmoji, setSavingEmoji] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
-    const [uploading, setUploading] = useState(false);
+    const scrollTimeoutRef = useRef(null);
+    const lastScrollHeightRef = useRef(0);
 
     const scrollToBottom = () => {
-        if (chatEndRef.current) {
-            chatEndRef.current.scrollIntoView({ behavior: 'auto' });
+        const container = chatContainerRef.current;
+        if (container) {
+            const currentScrollHeight = container.scrollHeight;
+            // Use requestAnimationFrame to ensure DOM is fully updated
+            requestAnimationFrame(() => {
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                    // If scrollHeight changed, it means content was added, scroll again
+                    if (container.scrollHeight !== currentScrollHeight) {
+                        requestAnimationFrame(() => {
+                            if (container) {
+                                container.scrollTop = container.scrollHeight;
+                            }
+                        });
+                    }
+                }
+            });
         }
     };
 
-    // Scroll to bottom when messages change
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-    // Scroll to bottom immediately when entering a chat (friend changes)
-    useEffect(() => {
-        // Use setTimeout to ensure DOM is fully rendered
-        const timer = setTimeout(() => {
+    // Use useLayoutEffect to scroll before browser paint, preventing flash
+    useLayoutEffect(() => {
+        const container = chatContainerRef.current;
+        if (container) {
+            // Reset scroll height tracking when messages or friend changes
+            lastScrollHeightRef.current = 0;
             scrollToBottom();
-        }, 100);
+            // Also scroll after a short delay to catch images that load after initial render
+            const timer = setTimeout(() => {
+                scrollToBottom();
+                // Update last scroll height after images potentially load
+                if (container) {
+                    lastScrollHeightRef.current = container.scrollHeight;
+                }
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [messages, friend]);
+
+    // Handle image load - scroll to bottom after image loads
+    // Use debounce to avoid excessive scrolling
+    const handleImageLoad = () => {
+        const container = chatContainerRef.current;
+        if (!container) return;
         
-        return () => clearTimeout(timer);
-    }, [friend]);
+        // Check if scrollHeight has changed (image loaded and rendered)
+        const newScrollHeight = container.scrollHeight;
+        if (newScrollHeight !== lastScrollHeightRef.current) {
+            lastScrollHeightRef.current = newScrollHeight;
+            // Clear previous timeout
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+            // Debounce scrolling to wait for all images to potentially load
+            scrollTimeoutRef.current = setTimeout(() => {
+                scrollToBottom();
+            }, 50);
+        }
+    };
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const formatTimestamp = (timestamp) => {
         const date = new Date(timestamp);
@@ -76,12 +127,10 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
         e.preventDefault();
         e.stopPropagation();
         
-        // Only hide overlay if we're leaving the main container
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX;
         const y = e.clientY;
         
-        // If mouse is outside the container bounds, hide the overlay
         if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
             setIsDragging(false);
         }
@@ -90,7 +139,6 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
     const handleDragOver = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Keep showing the overlay while dragging over
         if (!isDragging) {
             setIsDragging(true);
         }
@@ -103,50 +151,12 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
 
         const files = e.dataTransfer.files;
         
-        if (files && files.length > 0) {
+        if (files && files.length > 0 && onAddImageToQueue) {
             const file = files[0];
-            
-            // Check if it's an image
-            if (!file.type.startsWith('image/')) {
-                alert('Please drop an image file');
-                return;
-            }
-
-            // Check file size (5MB max)
-            if (file.size > 5 * 1024 * 1024) {
-                alert('Image size must be less than 5MB');
-                return;
-            }
-
-            // Upload image
-            setUploading(true);
-            try {
-                const token = localStorage.getItem('token');
-                const formData = new FormData();
-                formData.append('image', file);
-
-                const response = await axios.post(
-                    `${process.env.REACT_APP_SERVER_DOMAIN}/upload/chat-image`,
-                    formData,
-                    {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'multipart/form-data'
-                        }
-                    }
-                );
-
-                if (response.data.imageUrl && onImageUpload) {
-                    onImageUpload(response.data.imageUrl);
-                }
-            } catch (error) {
-                console.error('Error uploading image:', error);
-                alert(error.response?.data?.error || 'Failed to upload image');
-            } finally {
-                setUploading(false);
-            }
+            await onAddImageToQueue(file);
         }
     };
+
 
     return (
         <div style={{ 
@@ -156,6 +166,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             position: 'relative'
         }}>
             <div
+                ref={chatContainerRef}
                 className={`chat-container ${isMobile ? 'mobile-chat-container' : 'p-3'}`}
                 style={{ 
                     marginTop: isMobile ? '0' : 'var(--header-height, 69px)', 
@@ -219,7 +230,12 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                             <div className={`chat-bubble ${message.self ? 'self' : 'other'}`}>
                                 {message.imageUrl && (
                                     <div
-                                        style={{ position: 'relative', display: 'inline-block' }}
+                                        style={{ 
+                                            position: 'relative', 
+                                            display: 'inline-block',
+                                            maxWidth: '100%',
+                                            overflow: 'hidden'
+                                        }}
                                         onMouseEnter={() => setHoveredImageIndex(index)}
                                         onMouseLeave={() => setHoveredImageIndex(null)}
                                     >
@@ -227,14 +243,19 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                             src={getFullImageUrl(message.imageUrl)} 
                                             alt="chat" 
                                             style={{ 
-                                                maxWidth: '300px', 
-                                                maxHeight: '300px', 
+                                                maxWidth: '100%',
+                                                maxHeight: '300px',
+                                                width: 'auto',
+                                                height: 'auto',
                                                 borderRadius: '8px',
                                                 cursor: 'pointer',
                                                 display: 'block',
-                                                marginBottom: message.text ? '8px' : '0'
+                                                marginBottom: message.text ? '8px' : '0',
+                                                objectFit: 'contain'
                                             }}
                                             onClick={() => setFullImageView(getFullImageUrl(message.imageUrl))}
+                                            onLoad={handleImageLoad}
+                                            onError={handleImageLoad}
                                         />
                                         {hoveredImageIndex === index && !savingEmoji && (
                                             <button
@@ -302,33 +323,6 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             )}
 
                 <div ref={chatEndRef}></div>
-
-
-                {/* Uploading Overlay */}
-                {uploading && (
-                    <div
-                        style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 1000
-                        }}
-                    >
-                        <div className="spinner-border text-light mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-                            <span className="visually-hidden">Uploading...</span>
-                        </div>
-                        <div style={{ color: 'white', fontSize: '1.2rem' }}>
-                            Uploading image...
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Drag and Drop Overlay */}
@@ -366,7 +360,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                         fontWeight: 'bold',
                         marginBottom: '10px'
                     }}>
-                        Drop image here to send
+                        Drop image here to add to queue
                     </div>
                     <div style={{ 
                         color: '#FF6B9D', 
@@ -384,9 +378,11 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                     input={input}
                     onInputChange={onInputChange}
                     onSendMessage={onSendMessage}
-                    onImageUpload={onImageUpload}
                     onToggleEmojiPanel={onToggleEmojiPanel}
                     isMobile={true}
+                    imageQueue={imageQueue}
+                    onAddImageToQueue={onAddImageToQueue}
+                    onRemoveImageFromQueue={onRemoveImageFromQueue}
                 />
             )}
 

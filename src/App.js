@@ -55,6 +55,7 @@ function App() {
     );
     const [showNotificationModal, setShowNotificationModal] = useState(false);
     const [showEmojiPanel, setShowEmojiPanel] = useState(false);
+    const [imageQueue, setImageQueue] = useState([]); // [{ id, preview, imageUrl, uploading }]
     
     // Mobile-specific states
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -158,6 +159,13 @@ function App() {
         const handleReceiveMessage = (message) => {
             console.log('Received message:', message);
 
+            // Skip if this is a message we just sent
+            // Server should only send receive_message to receiver, but add check for safety
+            if (message.senderId === userId) {
+                console.log('Skipping own message from socket (already added optimistically)');
+                return;
+            }
+
             //Check Local Storge notification settings
             const isInternalNotificationEnabled = JSON.parse(localStorage.getItem("internalNotificationEnabled")) || false;
 
@@ -196,10 +204,33 @@ function App() {
                         return updated;
                     });
                 } else {
-                    setDms((prevDms) => [...prevDms, updatedMessage]);
+                    // Check for duplicates before adding
+                    setDms((prevDms) => {
+                        // Check if message already exists (by timestamp + imageUrl/text + senderId)
+                        const messageKey = `${message.timestamp}_${message.imageUrl || ''}_${message.text || ''}_${message.senderId}`;
+                        const exists = prevDms.some(dm => {
+                            const dmKey = `${dm.timestamp}_${dm.imageUrl || ''}_${dm.text || ''}_${dm.senderId}`;
+                            return dmKey === messageKey;
+                        });
+                        if (exists) {
+                            console.log('Duplicate message detected, skipping');
+                            return prevDms;
+                        }
+                        return [...prevDms, updatedMessage];
+                    });
                 }
 
                 setMessages((prevMessages) => {
+                    // Check for duplicates before adding
+                    const messageKey = `${message.timestamp}_${message.imageUrl || ''}_${message.text || ''}_${message.senderId}`;
+                    const exists = prevMessages.some(msg => {
+                        const msgKey = `${msg.timestamp}_${msg.imageUrl || ''}_${msg.text || ''}_${msg.senderId}`;
+                        return msgKey === messageKey;
+                    });
+                    if (exists) {
+                        console.log('Duplicate message detected in messages, skipping');
+                        return prevMessages;
+                    }
                     const updatedMessages = [...prevMessages, message];
                     return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 });
@@ -648,45 +679,177 @@ function App() {
         }
     };
 
-    const handleSendDM = (e) => {
-        e.preventDefault();
-        if (input.trim() && selectedFriend) {
-            const newMessage = {
-                senderId: userId,
-                receiverId: selectedFriend.id,
-                text: input,
-                timestamp: new Date().toISOString(),
-                avatar: nickname,
-            };
+    // Remove image from queue
+    const removeImageFromQueue = (imageId) => {
+        setImageQueue(prev => prev.filter(item => item.id !== imageId));
+    };
 
-            console.log('Sending message:', newMessage); //for debug
+    // Add image to queue (for drag & drop and file select)
+    const addImageToQueue = async (file) => {
+        if (!file) return;
 
-            socket.emit('send_message', newMessage);
+        // Check file type
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file');
+            return;
+        }
 
-            setMessages((prevMessages) => {
-                const updatedMessages = [...prevMessages, { ...newMessage, self: true }];
-                return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        // Check file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Image size must be less than 5MB');
+            return;
+        }
+
+        // Create preview
+        const reader = new FileReader();
+        const imageId = Date.now();
+        reader.onloadend = () => {
+            // Add to queue with uploading state
+            setImageQueue(prev => [...prev, {
+                id: imageId,
+                preview: reader.result,
+                imageUrl: null,
+                uploading: true
+            }]);
+        };
+        reader.readAsDataURL(file);
+
+        // Upload image
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('image', file);
+
+            const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/upload/chat-image`, formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
             });
 
-            setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
-
-            setInput('');
-
-            //Update messageList to show latest messages.
-            setFriends((prevFriends) =>
-                prevFriends.map((friend) =>
-                    friend.id === selectedFriend.id
-                        ? {
-                            ...friend,
-                            lastMessage: newMessage.text,
-                            lastMessageTime: newMessage.timestamp,
-                        }
-                        : friend
-                )
-            );
+            if (response.data.imageUrl) {
+                // Update queue item with uploaded URL
+                setImageQueue(prev => prev.map(item => 
+                    item.id === imageId 
+                        ? { ...item, imageUrl: response.data.imageUrl, uploading: false }
+                        : item
+                ));
+            }
+        } catch (error) {
+            console.error('Error uploading image:', error);
+            alert(error.response?.data?.error || 'Failed to upload image');
+            // Remove failed item from queue
+            setImageQueue(prev => prev.filter(item => item.id !== imageId));
         }
     };
 
+    const handleSendDM = (e, imageUrls = []) => {
+        e.preventDefault();
+        const hasText = input.trim();
+        const hasImages = imageUrls && imageUrls.length > 0;
+        
+        if ((hasText || hasImages) && selectedFriend) {
+            // If multiple images, send them separately; if single image or text+image, send together
+            if (hasImages && hasImages.length === 1 && hasText) {
+                // Single image with text - send together
+                const newMessage = {
+                    senderId: userId,
+                    receiverId: selectedFriend.id,
+                    text: input.trim(),
+                    imageUrl: imageUrls[0],
+                    timestamp: new Date().toISOString(),
+                    avatar: nickname,
+                };
+
+                console.log('Sending message with image:', newMessage);
+
+                socket.emit('send_message', newMessage);
+
+                setMessages((prevMessages) => {
+                    const updatedMessages = [...prevMessages, { ...newMessage, self: true }];
+                    return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                });
+
+                setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
+
+                setInput('');
+                setImageQueue([]); // Clear queue after sending
+
+                //Update messageList
+                setFriends((prevFriends) =>
+                    prevFriends.map((friend) =>
+                        friend.id === selectedFriend.id
+                            ? {
+                                ...friend,
+                                lastMessage: newMessage.text || '[Image]',
+                                lastMessageTime: newMessage.timestamp,
+                            }
+                            : friend
+                    )
+                );
+            } else {
+                // Multiple images or images only - send text first (if any), then images
+                if (hasText) {
+                    const textMessage = {
+                        senderId: userId,
+                        receiverId: selectedFriend.id,
+                        text: input.trim(),
+                        timestamp: new Date().toISOString(),
+                        avatar: nickname,
+                    };
+
+                    socket.emit('send_message', textMessage);
+
+                    setMessages((prevMessages) => {
+                        const updatedMessages = [...prevMessages, { ...textMessage, self: true }];
+                        return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    });
+
+                    setDms((prevDms) => [...prevDms, { ...textMessage, self: true, avatar: nickname }]);
+                }
+
+                // Send each image as separate message
+                imageUrls.forEach((imageUrl, index) => {
+                    const imageMessage = {
+                        senderId: userId,
+                        receiverId: selectedFriend.id,
+                        text: null,
+                        imageUrl: imageUrl,
+                        timestamp: new Date(Date.now() + index).toISOString(), // Slight delay to maintain order
+                        avatar: nickname,
+                    };
+
+                    socket.emit('send_message', imageMessage);
+
+                    setMessages((prevMessages) => {
+                        const updatedMessages = [...prevMessages, { ...imageMessage, self: true }];
+                        return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    });
+
+                    setDms((prevDms) => [...prevDms, { ...imageMessage, self: true, avatar: nickname }]);
+                });
+
+                setInput('');
+                setImageQueue([]); // Clear queue after sending
+
+                //Update messageList
+                const lastMessage = hasText ? input.trim() : '[Image]';
+                setFriends((prevFriends) =>
+                    prevFriends.map((friend) =>
+                        friend.id === selectedFriend.id
+                            ? {
+                                ...friend,
+                                lastMessage: lastMessage,
+                                lastMessageTime: new Date().toISOString(),
+                            }
+                            : friend
+                    )
+                );
+            }
+        }
+    };
+
+    // Used for emoji panel - sends immediately (not queued)
     const handleImageUpload = (imageUrl) => {
         if (imageUrl && selectedFriend) {
             const newMessage = {
@@ -1133,8 +1296,10 @@ function App() {
                                         input={input}
                                         onInputChange={(e) => setInput(e.target.value)}
                                         onSendMessage={handleSendDM}
-                                        onImageUpload={handleImageUpload}
                                         onToggleEmojiPanel={handleToggleEmojiPanel}
+                                        imageQueue={imageQueue}
+                                        onAddImageToQueue={addImageToQueue}
+                                        onRemoveImageFromQueue={removeImageFromQueue}
                                     />
                                 </div>
                             )}
@@ -1218,15 +1383,19 @@ function App() {
                                             currentChat={selectedFriend ? selectedFriend.nickname : 'Select a conversation'}
                                             friend={selectedFriend}
                                             isMobile={false}
-                                            onImageUpload={handleImageUpload}
+                                            imageQueue={imageQueue}
+                                            onAddImageToQueue={addImageToQueue}
+                                            onRemoveImageFromQueue={removeImageFromQueue}
                                         />
                                         <MessageInput
                                             input={input}
                                             onInputChange={(e) => setInput(e.target.value)}
                                             onSendMessage={selectedFriend ? handleSendDM : null}
-                                            onImageUpload={handleImageUpload}
                                             onToggleEmojiPanel={handleToggleEmojiPanel}
                                             isMobile={false}
+                                            imageQueue={imageQueue}
+                                            onAddImageToQueue={addImageToQueue}
+                                            onRemoveImageFromQueue={removeImageFromQueue}
                                         />
                                         {/* Emoji Panel for Desktop */}
                                         {!isMobile && (

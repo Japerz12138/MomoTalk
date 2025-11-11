@@ -646,15 +646,46 @@ app.post('/upload/avatar', authenticateToken, upload.single('avatar'), async (re
             console.log(`Avatar reused from MD5 cache: ${md5Hash}`);
         } else {
             // New image, proceed with upload
-            const fileExtension = 'jpg';
+            // Detect original format to preserve PNG transparency
+            const image = sharp(req.file.buffer);
+            const metadata = await image.metadata();
+            const originalFormat = metadata.format; // 'gif', 'png', 'jpeg', 'webp', etc.
+            
+            // Determine file extension based on original format
+            // For avatars, we prefer PNG for transparency, but convert GIF to static
+            let fileExtension;
+            if (originalFormat === 'png') {
+                fileExtension = 'png';
+            } else if (originalFormat === 'webp') {
+                fileExtension = 'webp';
+            } else {
+                // Default to jpg for jpeg, gif (converted to static), and other formats
+                fileExtension = 'jpg';
+            }
+            
             const filename = `avatar_${userId}_${Date.now()}.${fileExtension}`;
             const filepath = path.join(__dirname, 'uploads', 'avatars', filename);
 
-            // Process image with sharp: resize and optimize
-            await sharp(req.file.buffer)
-                .resize(400, 400, { fit: 'cover' })
-                .jpeg({ quality: 85 })
-                .toFile(filepath);
+            // Process image based on format
+            if (originalFormat === 'png') {
+                // For PNG, preserve transparency
+                await image
+                    .resize(400, 400, { fit: 'cover' })
+                    .png({ quality: 90, compressionLevel: 9 })
+                    .toFile(filepath);
+            } else if (originalFormat === 'webp') {
+                // For WebP, preserve format
+                await image
+                    .resize(400, 400, { fit: 'cover' })
+                    .webp({ quality: 85 })
+                    .toFile(filepath);
+            } else {
+                // For JPEG, GIF (convert to static), and other formats, convert to JPEG
+                await image
+                    .resize(400, 400, { fit: 'cover' })
+                    .jpeg({ quality: 85 })
+                    .toFile(filepath);
+            }
 
             // Generate relative URL path (works with same-origin frontend)
             avatarUrl = `/uploads/avatars/${filename}`;
@@ -665,7 +696,7 @@ app.post('/upload/avatar', authenticateToken, upload.single('avatar'), async (re
                 [md5Hash, avatarUrl, req.file.size]
             );
             
-            console.log(`New avatar uploaded with MD5: ${md5Hash}`);
+            console.log(`New avatar uploaded with MD5: ${md5Hash}, format: ${originalFormat}`);
         }
 
         // Update user's avatar in database
@@ -715,24 +746,70 @@ app.post('/upload/chat-image', authenticateToken, upload.single('image'), async 
             console.log(`Chat image reused from MD5 cache: ${md5Hash}`);
         } else {
             // New image, proceed with upload
-            const fileExtension = 'jpg';
+            // Detect original format to preserve GIF animation and PNG transparency
+            const image = sharp(req.file.buffer);
+            const metadata = await image.metadata();
+            const originalFormat = metadata.format; // 'gif', 'png', 'jpeg', 'webp', etc.
+            
+            // Determine file extension based on original format
+            let fileExtension;
+            if (originalFormat === 'gif') {
+                fileExtension = 'gif';
+            } else if (originalFormat === 'png') {
+                fileExtension = 'png';
+            } else if (originalFormat === 'webp') {
+                fileExtension = 'webp';
+            } else {
+                // Default to jpg for jpeg and other formats
+                fileExtension = 'jpg';
+            }
+            
             const filename = `chat_${userId}_${Date.now()}.${fileExtension}`;
             const filepath = path.join(__dirname, 'uploads', 'chat-images', filename);
 
-            // Process image with sharp: resize if too large and optimize
-            const image = sharp(req.file.buffer);
-            const metadata = await image.metadata();
-
-            // Resize if width > 1200px
-            if (metadata.width > 1200) {
-                await image
-                    .resize(1200, null, { withoutEnlargement: true })
-                    .jpeg({ quality: 85 })
-                    .toFile(filepath);
+            // Process image based on format
+            if (originalFormat === 'gif') {
+                // For GIF, preserve animation by writing original buffer directly
+                // Only resize if too large (this will convert to static, so we skip resizing for GIFs)
+                // For now, save GIF as-is to preserve animation
+                fs.writeFileSync(filepath, req.file.buffer);
+            } else if (originalFormat === 'png') {
+                // For PNG, preserve transparency
+                if (metadata.width > 1200) {
+                    await image
+                        .resize(1200, null, { withoutEnlargement: true })
+                        .png({ quality: 90, compressionLevel: 9 })
+                        .toFile(filepath);
+                } else {
+                    // Optimize PNG without resizing
+                    await image
+                        .png({ quality: 90, compressionLevel: 9 })
+                        .toFile(filepath);
+                }
+            } else if (originalFormat === 'webp') {
+                // For WebP, preserve format
+                if (metadata.width > 1200) {
+                    await image
+                        .resize(1200, null, { withoutEnlargement: true })
+                        .webp({ quality: 85 })
+                        .toFile(filepath);
+                } else {
+                    await image
+                        .webp({ quality: 85 })
+                        .toFile(filepath);
+                }
             } else {
-                await image
-                    .jpeg({ quality: 85 })
-                    .toFile(filepath);
+                // For JPEG and other formats, convert to JPEG
+                if (metadata.width > 1200) {
+                    await image
+                        .resize(1200, null, { withoutEnlargement: true })
+                        .jpeg({ quality: 85 })
+                        .toFile(filepath);
+                } else {
+                    await image
+                        .jpeg({ quality: 85 })
+                        .toFile(filepath);
+                }
             }
 
             // Generate relative URL path (works with same-origin frontend)
@@ -744,7 +821,7 @@ app.post('/upload/chat-image', authenticateToken, upload.single('image'), async 
                 [md5Hash, imageUrl, req.file.size]
             );
             
-            console.log(`New chat image uploaded with MD5: ${md5Hash}`);
+            console.log(`New chat image uploaded with MD5: ${md5Hash}, format: ${originalFormat}`);
         }
 
         res.json({ 

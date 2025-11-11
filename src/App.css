@@ -137,6 +137,8 @@ html, body {
   border-radius: 15px;
   margin: 5px 0;
   color: white;
+  overflow: hidden;
+  word-wrap: break-word;
 }
 .chat-bubble.other {
   background-color: #4C5B6F;
@@ -177,6 +179,8 @@ html, body {
   border-radius: 15px;
   margin: 5px 0;
   color: white;
+  overflow: hidden;
+  word-wrap: break-word;
 }
 .chat-bubble.other {
   background-color: #4C5B6F;
