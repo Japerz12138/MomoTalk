@@ -177,7 +177,7 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
             <div className="card">
                 <div className="card-body">
                     <h5 className="card-title">About</h5>
-                    <p>Version: 1.1.0</p>
+                    <p>Version: 1.1.5</p>
                     <p>Welcome to MomoTalk! This is CSCI 621 - Programming Languages Final Project!</p>
                     <p>Professor: Khalid Mirza</p>
                     <p>Github: Japerz12138</p>

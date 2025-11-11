@@ -149,11 +149,21 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
         e.stopPropagation();
         setIsDragging(false);
 
-        const files = e.dataTransfer.files;
+        const files = Array.from(e.dataTransfer.files || []);
         
-        if (files && files.length > 0 && onAddImageToQueue) {
-            const file = files[0];
-            await onAddImageToQueue(file);
+        if (files.length > 0 && onAddImageToQueue) {
+            // Filter to only image files
+            const imageFiles = files.filter(file => file.type.startsWith('image/'));
+            
+            if (imageFiles.length === 0) {
+                alert('Please drop image files only');
+                return;
+            }
+            
+            // Add each image file (addImageToQueue will handle the 10 image limit)
+            for (const file of imageFiles) {
+                await onAddImageToQueue(file);
+            }
         }
     };
 

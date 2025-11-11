@@ -702,15 +702,22 @@ function App() {
 
         // Create preview
         const reader = new FileReader();
-        const imageId = Date.now();
+        const imageId = Date.now() + Math.random(); // Add random to ensure unique IDs when adding multiple files
         reader.onloadend = () => {
-            // Add to queue with uploading state
-            setImageQueue(prev => [...prev, {
-                id: imageId,
-                preview: reader.result,
-                imageUrl: null,
-                uploading: true
-            }]);
+            // Add to queue with uploading state, check limit here (max 10 images)
+            const maxImages = 10;
+            setImageQueue(prev => {
+                if (prev.length >= maxImages) {
+                    alert(`You can only select up to ${maxImages} images at a time. Please remove some images first.`);
+                    return prev;
+                }
+                return [...prev, {
+                    id: imageId,
+                    preview: reader.result,
+                    imageUrl: null,
+                    uploading: true
+                }];
+            });
         };
         reader.readAsDataURL(file);
 

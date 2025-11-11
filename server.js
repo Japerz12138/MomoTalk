@@ -59,12 +59,6 @@ app.use(express.static(path.join(__dirname, 'build')));
 
 // Image access authentication
 app.get('/uploads/*', async (req, res) => {
-    // Check Referer to prevent direct URL access
-    const referer = req.get('Referer') || req.get('Referrer');
-    if (!referer || !referer.startsWith(HOST_DOMAIN)) {
-        return res.status(403).json({ error: 'Access denied' });
-    }
-    
     // Extract path without query parameters
     const imagePath = req.path.split('?')[0]; // 例如: /uploads/avatars/avatar_1_xxx.jpg
     const filePath = path.join(__dirname, imagePath);
@@ -81,8 +75,9 @@ app.get('/uploads/*', async (req, res) => {
         return res.status(404).json({ error: 'Image not found' });
     }
     
-    // Try to get userId from token (optional for images accessed from app)
+    // Try to get userId from token (priority check - if token is valid, allow access)
     let userId = null;
+    let hasValidToken = false;
     const token = req.headers['authorization']?.split(' ')[1] || req.query.token;
     if (token) {
         try {
@@ -91,9 +86,21 @@ app.get('/uploads/*', async (req, res) => {
             const [results] = await db.promise().query('SELECT session_token FROM users WHERE id = ?', [decodedUserId]);
             if (results.length > 0 && results[0].session_token === sessionToken) {
                 userId = decodedUserId;
+                hasValidToken = true;
             }
         } catch (err) {
-            // Token invalid, but continue if Referer is valid
+            // Token invalid
+        }
+    }
+    
+    // If token is valid, allow access (skip Referer check)
+    if (hasValidToken) {
+        // Token is valid, proceed with permission checks below
+    } else {
+        // If no valid token, check Referer to prevent direct URL access
+        const referer = req.get('Referer') || req.get('Referrer');
+        if (!referer || !referer.startsWith(HOST_DOMAIN)) {
+            return res.status(403).json({ error: 'Access denied' });
         }
     }
     

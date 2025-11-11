@@ -10,17 +10,40 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
     };
 
     const handleFileSelect = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        
+        // Check total count limit (max 10 images)
+        const maxImages = 10;
+        const currentCount = imageQueue.length;
+        const remainingSlots = maxImages - currentCount;
+        
+        if (remainingSlots <= 0) {
+            alert(`You can only select up to ${maxImages} images at a time. Please remove some images first.`);
+            // Reset file input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            return;
+        }
+        
+        // Limit the number of files to the remaining slots
+        const filesToAdd = files.slice(0, remainingSlots);
+        
+        if (files.length > remainingSlots) {
+            alert(`You can only add ${remainingSlots} more image(s). ${files.length - remainingSlots} image(s) were not added.`);
+        }
         
         // Reset file input
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
 
-        // Use shared addImageToQueue function
+        // Add each file to queue
         if (onAddImageToQueue) {
-            await onAddImageToQueue(file);
+            for (const file of filesToAdd) {
+                await onAddImageToQueue(file);
+            }
         }
     };
 
@@ -120,6 +143,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                     ref={fileInputRef}
                     onChange={handleFileSelect}
                     accept="image/*"
+                    multiple
                     style={{ display: 'none' }}
                 />
                 <button
