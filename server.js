@@ -23,6 +23,15 @@ if (!SECRET_KEY) {
     process.exit(1);
 }
 
+const ACCESS_TOKEN_EXPIRES_IN = process.env.ACCESS_TOKEN_EXPIRES_IN || '15m';
+const parsedRefreshDays = parseInt(process.env.REFRESH_TOKEN_TTL_DAYS || '7', 10);
+const REFRESH_TOKEN_TTL_DAYS = Number.isFinite(parsedRefreshDays) && parsedRefreshDays > 0 ? parsedRefreshDays : 7;
+const REFRESH_TOKEN_TTL_MS = REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
+const parsedMaxSessions = parseInt(process.env.MAX_SESSIONS_PER_USER || '10', 10);
+const MAX_SESSIONS_PER_USER = Number.isFinite(parsedMaxSessions) && parsedMaxSessions > 0 ? parsedMaxSessions : 10;
+const TOKEN_TYPE_ACCESS = 'access';
+const TOKEN_TYPE_REFRESH = 'refresh';
+
 const DB_CONFIG = {
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER,
@@ -43,6 +52,99 @@ if (!DB_CONFIG.user || !DB_CONFIG.password || !DB_CONFIG.database) {
 
 const app = express();
 const onlineUsers = new Map();
+
+function ensureUserSessionsTable() {
+    const createTableQuery = `
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            session_id VARCHAR(128) NOT NULL UNIQUE,
+            refresh_token_hash CHAR(64) NOT NULL,
+            refresh_expires_at DATETIME NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_user_sessions_user_id (user_id)
+        ) ENGINE=InnoDB;
+    `;
+
+    db.query(createTableQuery, (err) => {
+        if (err) {
+            console.error('Failed to ensure user_sessions table exists:', err);
+        }
+    });
+}
+
+function generateSessionId() {
+    return typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : crypto.randomBytes(16).toString('hex');
+}
+
+function createRefreshToken(sessionId) {
+    return `${sessionId}.${crypto.randomBytes(48).toString('hex')}`;
+}
+
+function hashToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function parseRefreshToken(refreshToken) {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+        return null;
+    }
+
+    const [sessionId, secretPart] = refreshToken.split('.');
+    if (!sessionId || !secretPart) {
+        return null;
+    }
+
+    return { sessionId };
+}
+
+function getRefreshExpiryDate() {
+    return new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+}
+
+function issueAccessToken({ userId, username, sessionId }) {
+    return jwt.sign(
+        {
+            userId,
+            username,
+            sessionId,
+            type: TOKEN_TYPE_ACCESS
+        },
+        SECRET_KEY,
+        { expiresIn: ACCESS_TOKEN_EXPIRES_IN }
+    );
+}
+
+function pruneExcessSessions(userId) {
+    return new Promise((resolve) => {
+        if (!MAX_SESSIONS_PER_USER) {
+            return resolve();
+        }
+
+        const pruneQuery = `
+            DELETE FROM user_sessions
+            WHERE user_id = ?
+              AND id NOT IN (
+                  SELECT id FROM (
+                      SELECT id FROM user_sessions
+                      WHERE user_id = ?
+                      ORDER BY last_used_at DESC
+                      LIMIT ?
+                  ) AS recent_sessions
+              )
+        `;
+
+        db.query(pruneQuery, [userId, userId, MAX_SESSIONS_PER_USER], (err) => {
+            if (err) {
+                console.error('Failed to prune old sessions:', err);
+            }
+            resolve();
+        });
+    });
+}
 
 // Middleware configuration
 app.use(cors({
@@ -82,11 +184,30 @@ app.get('/uploads/*', async (req, res) => {
     if (token) {
         try {
             const decoded = jwt.verify(token, SECRET_KEY);
-            const { userId: decodedUserId, sessionToken } = decoded;
-            const [results] = await db.promise().query('SELECT session_token FROM users WHERE id = ?', [decodedUserId]);
-            if (results.length > 0 && results[0].session_token === sessionToken) {
-                userId = decodedUserId;
-                hasValidToken = true;
+            const { userId: decodedUserId, sessionId, sessionToken, type } = decoded;
+
+            if (type && type !== TOKEN_TYPE_ACCESS) {
+                throw new Error('Invalid token type');
+            }
+
+            if (decodedUserId && sessionId) {
+                const [sessions] = await db.promise().query(
+                    'SELECT refresh_expires_at FROM user_sessions WHERE user_id = ? AND session_id = ? LIMIT 1',
+                    [decodedUserId, sessionId]
+                );
+                if (sessions.length > 0) {
+                    const expiresAt = new Date(sessions[0].refresh_expires_at);
+                    if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() > Date.now()) {
+                        userId = decodedUserId;
+                        hasValidToken = true;
+                    }
+                }
+            } else if (decodedUserId && sessionToken) {
+                const [results] = await db.promise().query('SELECT session_token FROM users WHERE id = ?', [decodedUserId]);
+                if (results.length > 0 && results[0].session_token === sessionToken) {
+                    userId = decodedUserId;
+                    hasValidToken = true;
+                }
             }
         } catch (err) {
             // Token invalid
@@ -189,6 +310,8 @@ const upload = multer({
 
 // Database connection
 const db = mysql.createPool(DB_CONFIG);
+
+ensureUserSessionsTable();
 
 db.getConnection((err, connection) => {
     if (err) {
@@ -390,27 +513,130 @@ app.post('/login', (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Generate new session_token
-        const sessionToken = crypto.randomBytes(32).toString('hex');
+        const sessionId = generateSessionId();
+        const refreshToken = createRefreshToken(sessionId);
+        const refreshTokenHash = hashToken(refreshToken);
+        const refreshExpiresAt = getRefreshExpiryDate();
 
-        const updateQuery = 'UPDATE users SET session_token = ? WHERE id = ?';
-        db.query(updateQuery, [sessionToken, user.id], (err) => {
-            if (err) return res.status(500).json({ error: 'Failed to update session token' });
+        const insertSessionQuery = `
+            INSERT INTO user_sessions (user_id, session_id, refresh_token_hash, refresh_expires_at)
+            VALUES (?, ?, ?, ?)
+        `;
 
-            const token = jwt.sign({ userId: user.id, username: user.username, sessionToken }, SECRET_KEY, { expiresIn: '3h' });
+        db.query(insertSessionQuery, [user.id, sessionId, refreshTokenHash, refreshExpiresAt], (insertErr) => {
+            if (insertErr) {
+                console.error('Failed to store session:', insertErr);
+                return res.status(500).json({ error: 'Failed to create session' });
+            }
 
-            res.json({
-                token,
+            const accessToken = issueAccessToken({
                 userId: user.id,
                 username: user.username,
-                nickname: user.nickname,
-                avatar: user.avatar || null,
-                email: user.email,
-                momoCode: user.momo_code || null,
-                signature: user.signature || '',
+                sessionId
+            });
+
+            pruneExcessSessions(user.id).finally(() => {
+                res.json({
+                    token: accessToken,
+                    accessToken,
+                    refreshToken,
+                    userId: user.id,
+                    username: user.username,
+                    nickname: user.nickname,
+                    avatar: user.avatar || null,
+                    email: user.email,
+                    momoCode: user.momo_code || null,
+                    signature: user.signature || '',
+                });
             });
         });
     });
+});
+
+app.post('/token/refresh', async (req, res) => {
+    const { refreshToken } = req.body || {};
+
+    if (!refreshToken) {
+        return res.status(400).json({ error: 'Refresh token is required' });
+    }
+
+    const parsed = parseRefreshToken(refreshToken);
+    if (!parsed) {
+        return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
+    const refreshTokenHash = hashToken(refreshToken);
+
+    try {
+        const [sessions] = await db.promise().query(
+            'SELECT id, user_id, refresh_expires_at FROM user_sessions WHERE session_id = ? AND refresh_token_hash = ? LIMIT 1',
+            [parsed.sessionId, refreshTokenHash]
+        );
+
+        if (sessions.length === 0) {
+            return res.status(401).json({ error: 'Invalid refresh token' });
+        }
+
+        const session = sessions[0];
+        const expiresAt = new Date(session.refresh_expires_at);
+        if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+            await db.promise().query('DELETE FROM user_sessions WHERE id = ?', [session.id]);
+            return res.status(401).json({ error: 'Refresh token expired' });
+        }
+
+        const [users] = await db.promise().query('SELECT username FROM users WHERE id = ? LIMIT 1', [session.user_id]);
+        const username = users.length > 0 ? users[0].username : undefined;
+
+        const accessToken = issueAccessToken({
+            userId: session.user_id,
+            username,
+            sessionId: parsed.sessionId
+        });
+
+        const nextRefreshToken = createRefreshToken(parsed.sessionId);
+        const nextRefreshHash = hashToken(nextRefreshToken);
+        const nextRefreshExpiry = getRefreshExpiryDate();
+
+        await db.promise().query(
+            'UPDATE user_sessions SET refresh_token_hash = ?, refresh_expires_at = ?, last_used_at = NOW() WHERE id = ?',
+            [nextRefreshHash, nextRefreshExpiry, session.id]
+        );
+
+        res.json({
+            token: accessToken,
+            accessToken,
+            refreshToken: nextRefreshToken,
+        });
+    } catch (error) {
+        console.error('Failed to refresh access token:', error);
+        res.status(500).json({ error: 'Failed to refresh token' });
+    }
+});
+
+app.post('/logout', async (req, res) => {
+    const { refreshToken } = req.body || {};
+
+    if (!refreshToken) {
+        return res.status(200).json({ message: 'Logged out' });
+    }
+
+    const parsed = parseRefreshToken(refreshToken);
+    if (!parsed) {
+        return res.status(200).json({ message: 'Logged out' });
+    }
+
+    const refreshTokenHash = hashToken(refreshToken);
+
+    try {
+        await db.promise().query(
+            'DELETE FROM user_sessions WHERE session_id = ? AND refresh_token_hash = ?',
+            [parsed.sessionId, refreshTokenHash]
+        );
+        res.json({ message: 'Logged out' });
+    } catch (error) {
+        console.error('Failed to invalidate session:', error);
+        res.status(500).json({ error: 'Failed to logout' });
+    }
 });
 
 function authenticateToken(req, res, next) {
@@ -423,19 +649,75 @@ function authenticateToken(req, res, next) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
 
-        const { userId, sessionToken } = decoded;
+        const { userId, sessionId, sessionToken, type } = decoded;
 
-        // Auth if session_token matches to prevent same user login multiple times
-        const query = 'SELECT session_token FROM users WHERE id = ?';
-        db.query(query, [userId], (err, results) => {
-            if (err) return res.status(500).json({ error: 'Database error' });
-            if (results.length === 0 || results[0].session_token !== sessionToken) {
-                return res.status(401).json({ error: 'Invalid session token' });
-            }
+        if (!userId) {
+            return res.status(401).json({ error: 'Invalid session payload' });
+        }
 
-            req.user = { userId };
-            next();
-        });
+        if (type && type !== TOKEN_TYPE_ACCESS) {
+            return res.status(401).json({ error: 'Invalid token type' });
+        }
+
+        if (sessionId) {
+            const sessionQuery = `
+                SELECT id, refresh_expires_at
+                FROM user_sessions
+                WHERE user_id = ? AND session_id = ?
+                LIMIT 1
+            `;
+
+            db.query(sessionQuery, [userId, sessionId], (sessionErr, results) => {
+                if (sessionErr) {
+                    console.error('Failed to verify session:', sessionErr);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                if (results.length === 0) {
+                    return res.status(401).json({ error: 'Invalid session' });
+                }
+
+                const sessionRecord = results[0];
+                const expiresAt = new Date(sessionRecord.refresh_expires_at);
+                if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+                    const deleteQuery = 'DELETE FROM user_sessions WHERE id = ?';
+                    db.query(deleteQuery, [sessionRecord.id], (deleteErr) => {
+                        if (deleteErr) {
+                            console.error('Failed to delete expired session:', deleteErr);
+                        }
+                        return res.status(401).json({ error: 'Session expired' });
+                    });
+                    return;
+                }
+
+                const touchQuery = 'UPDATE user_sessions SET last_used_at = NOW() WHERE id = ?';
+                db.query(touchQuery, [sessionRecord.id], (touchErr) => {
+                    if (touchErr) {
+                        console.error('Failed to update session usage:', touchErr);
+                    }
+                    req.user = { userId, sessionId };
+                    next();
+                });
+            });
+            return;
+        }
+
+        // Backward compatibility: allow old tokens relying on users.session_token
+        if (sessionToken) {
+            const legacyQuery = 'SELECT session_token FROM users WHERE id = ?';
+            db.query(legacyQuery, [userId], (legacyErr, results) => {
+                if (legacyErr) return res.status(500).json({ error: 'Database error' });
+                if (results.length === 0 || results[0].session_token !== sessionToken) {
+                    return res.status(401).json({ error: 'Invalid session token' });
+                }
+
+                req.user = { userId };
+                next();
+            });
+            return;
+        }
+
+        return res.status(401).json({ error: 'Invalid session token' });
     });
 }
 

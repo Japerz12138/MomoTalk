@@ -9,6 +9,18 @@ CREATE TABLE users (
                        momo_code VARCHAR(14) NOT NULL UNIQUE
 );
 
+CREATE TABLE user_sessions (
+                       id INT AUTO_INCREMENT PRIMARY KEY,
+                       user_id INT NOT NULL,
+                       session_id VARCHAR(128) NOT NULL UNIQUE,
+                       refresh_token_hash CHAR(64) NOT NULL,
+                       refresh_expires_at DATETIME NOT NULL,
+                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                       last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                       INDEX idx_user_sessions_user_id (user_id),
+                       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE messages (
                           id INT PRIMARY KEY AUTO_INCREMENT,
                           user_id INT NOT NULL,

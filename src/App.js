@@ -47,6 +47,9 @@ function App() {
     const [avatar, setAvatar] = useState('');
     const [momoCode, setMomoCode] = useState('');
     const toastRef = useRef();
+    const isRefreshingRef = useRef(false);
+    const refreshQueueRef = useRef([]);
+    const refreshClientRef = useRef(axios.create());
     const [socketInstance, setSocket] = useState(null);
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [isAutoMode, setIsAutoMode] = useState(false);
@@ -130,14 +133,97 @@ function App() {
     }, [userId]);
 
     useEffect(() => {
+        const refreshClient = refreshClientRef.current;
+
+        const processQueue = (error, newAccessToken) => {
+            refreshQueueRef.current.forEach(({ resolve, reject }) => {
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve(newAccessToken);
+                }
+            });
+            refreshQueueRef.current = [];
+        };
+
         const interceptor = axios.interceptors.response.use(
             (response) => response,
-            (error) => {
-                if (error.response?.status === 401) {
-                    console.error('Session expired or unauthorized. Logging out.');
-                    handleLogout();
+            async (error) => {
+                const originalRequest = error.config;
+                const status = error.response?.status;
+
+                if (!originalRequest || status !== 401) {
+                    return Promise.reject(error);
                 }
-                return Promise.reject(error);
+
+                const requestUrl = originalRequest.url || '';
+                const shouldBypassRefresh =
+                    originalRequest._retry ||
+                    requestUrl.includes('/login') ||
+                    requestUrl.includes('/token/refresh') ||
+                    requestUrl.includes('/logout');
+
+                if (shouldBypassRefresh) {
+                    handleLogout();
+                    return Promise.reject(error);
+                }
+
+                const storedRefreshToken = localStorage.getItem('refreshToken');
+                if (!storedRefreshToken) {
+                    handleLogout();
+                    return Promise.reject(error);
+                }
+
+                originalRequest._retry = true;
+
+                if (isRefreshingRef.current) {
+                    return new Promise((resolve, reject) => {
+                        refreshQueueRef.current.push({ resolve, reject });
+                    })
+                        .then((newAccessToken) => {
+                            if (newAccessToken) {
+                                originalRequest.headers = originalRequest.headers || {};
+                                originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                            }
+                            return axios(originalRequest);
+                        })
+                        .catch((queueError) => Promise.reject(queueError));
+                }
+
+                isRefreshingRef.current = true;
+
+                try {
+                    const refreshResponse = await refreshClient.post(
+                        `${process.env.REACT_APP_SERVER_DOMAIN}/token/refresh`,
+                        { refreshToken: storedRefreshToken }
+                    );
+                    const { token: newAccessToken, refreshToken: newRefreshToken } = refreshResponse.data || {};
+
+                    if (!newAccessToken) {
+                        throw new Error('Missing access token in refresh response');
+                    }
+
+                    setToken(newAccessToken);
+                    localStorage.setItem('token', newAccessToken);
+                    axios.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+
+                    if (newRefreshToken) {
+                        localStorage.setItem('refreshToken', newRefreshToken);
+                    }
+
+                    processQueue(null, newAccessToken);
+
+                    originalRequest.headers = originalRequest.headers || {};
+                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+
+                    return axios(originalRequest);
+                } catch (refreshError) {
+                    processQueue(refreshError, null);
+                    handleLogout();
+                    return Promise.reject(refreshError);
+                } finally {
+                    isRefreshingRef.current = false;
+                }
             }
         );
 
@@ -471,7 +557,7 @@ function App() {
         e.preventDefault();
         try {
             const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/login`, { username, password });
-            const { token, username: loggedInUsername, nickname: loggedInNickname, signature: userSignature, userId: loggedInUserId, avatar, momoCode: userMomoCode } = response.data;
+            const { token, refreshToken, username: loggedInUsername, nickname: loggedInNickname, signature: userSignature, userId: loggedInUserId, avatar, momoCode: userMomoCode } = response.data;
 
             setToken(token);
             setUsername(loggedInUsername);
@@ -482,6 +568,9 @@ function App() {
             setMomoCode(userMomoCode || '');
 
             localStorage.setItem('token', token);
+            if (refreshToken) {
+                localStorage.setItem('refreshToken', refreshToken);
+            }
             localStorage.setItem('username', loggedInUsername);
             localStorage.setItem('nickname', loggedInNickname);
             localStorage.setItem('signature', userSignature || '');
@@ -923,6 +1012,15 @@ function App() {
     };
 
     const handleLogout = () => {
+        const storedRefreshToken = localStorage.getItem('refreshToken');
+        if (storedRefreshToken) {
+            refreshClientRef.current
+                .post(`${process.env.REACT_APP_SERVER_DOMAIN}/logout`, { refreshToken: storedRefreshToken })
+                .catch((error) => {
+                    console.error('Failed to revoke session on logout:', error?.response?.data?.error || error.message);
+                });
+        }
+
         if (socketInstance) {
             socketInstance.emit('leave_room', userId);
             socketInstance.removeAllListeners();
@@ -940,6 +1038,7 @@ function App() {
         setShowMenu(false);
 
         localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
         localStorage.removeItem('username');
         localStorage.removeItem('nickname');
         localStorage.removeItem('signature');
