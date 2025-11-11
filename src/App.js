@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
@@ -37,6 +37,7 @@ function App() {
     const [captcha, setCaptcha] = useState('');
     const [captchaInput, setCaptchaInput] = useState('');
     const [friends, setFriends] = useState([]);
+    const [friendRequests, setFriendRequests] = useState([]);
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [dms, setDms] = useState([]);
     const [showMenu, setShowMenu] = useState(false);
@@ -230,13 +231,53 @@ function App() {
         return () => axios.interceptors.response.eject(interceptor);
     }, []);
 
+    const fetchFriends = useCallback(async () => {
+        if (!token) return;
+        try {
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/friends`);
+            // Remove duplicates by id to prevent React key warnings
+            const uniqueFriends = response.data.filter((friend, index, self) =>
+                index === self.findIndex(f => f.id === friend.id)
+            );
+            setFriends(uniqueFriends);
+            
+            // Request fresh online status after fetching friends
+            if (uniqueFriends.length > 0) {
+                const friendIds = uniqueFriends.map(f => f.id);
+                socket.emit('request_friends_status', friendIds);
+            }
+        } catch (error) {
+            if (error.response?.status === 401) {
+                console.error('Unauthorized! Clearing token.');
+                handleLogout();
+            } else {
+                console.error('Error fetching friends:', error);
+            }
+        }
+    }, [token]);
+
+    const fetchFriendRequests = useCallback(async () => {
+        if (!token) return;
+        try {
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/requests`);
+            setFriendRequests(response.data);
+        } catch (error) {
+            if (error.response?.status === 401) {
+                console.error('Unauthorized! Clearing token.');
+                handleLogout();
+            } else {
+                console.error('Error fetching friend requests:', error);
+            }
+        }
+    }, [token]);
+
     // Fetch friends and requests when token is available
     useEffect(() => {
         if (token) {
             fetchFriends();
             fetchFriendRequests();
         }
-    }, [token]);
+    }, [token, fetchFriends, fetchFriendRequests]);
 
     // Handle incoming messages - NO join_room here!
     useEffect(() => {
@@ -343,18 +384,13 @@ function App() {
     }, [userId, selectedFriend]);
 
     useEffect(() => {
+        // Use socket (global) since user joins room via socket
         socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
             handleShowToast("New Friend!?", `${senderUsername} sent you a friend request!`);
             fetchFriendRequests();
             fetchFriends();
         });
 
-        return () => {
-            socket.off('receive_friend_request');
-        };
-    }, []);
-
-    useEffect(() => {
         socket.on('friend_request_responded', ({ receiverId, action }) => {
             if (action === 'accept') {
                 handleShowToast("Yay!", "Your friend request was accepted!");
@@ -364,23 +400,18 @@ function App() {
             }
         });
 
+        socket.on('update_friend_list', () => {
+            console.log('Received update_friend_list event');
+            fetchFriends();
+            fetchFriendRequests();
+        });
+
         return () => {
+            socket.off('receive_friend_request');
             socket.off('friend_request_responded');
+            socket.off('update_friend_list');
         };
-    }, []);
-
-    useEffect(() => {
-        if (socketInstance) {
-            socketInstance.on('update_friend_list', () => {
-                console.log('Received update_friend_list event');
-                fetchFriends();
-            });
-
-            return () => {
-                socketInstance.off('update_friend_list');
-            };
-        }
-    }, [socketInstance]);
+    }, [fetchFriendRequests, fetchFriends]);
 
     //User online status
     useEffect(() => {
@@ -532,27 +563,6 @@ function App() {
         }
     };
 
-    const fetchFriends = async () => {
-        if (!token) return;
-        try {
-            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/friends`);
-            setFriends(response.data);
-            
-            // Request fresh online status after fetching friends
-            if (response.data.length > 0) {
-                const friendIds = response.data.map(f => f.id);
-                socket.emit('request_friends_status', friendIds);
-            }
-        } catch (error) {
-            if (error.response?.status === 401) {
-                console.error('Unauthorized! Clearing token.');
-                handleLogout();
-            } else {
-                console.error('Error fetching friends:', error);
-            }
-        }
-    };
-
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
@@ -657,26 +667,10 @@ function App() {
         }
     };
 
-    const [friendRequests, setFriendRequests] = useState([]);
-
-    const fetchFriendRequests = async () => {
-        if (!token) return;
-        try {
-            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/requests`);
-            setFriendRequests(response.data);
-        } catch (error) {
-            if (error.response?.status === 401) {
-                console.error('Unauthorized! Clearing token.');
-                handleLogout();
-            } else {
-                console.error('Error fetching friend requests:', error);
-            }
-        }
-    };
 
     const respondToFriendRequest = async (requestId, action) => {
         try {
-            const response = await axios.post(
+            await axios.post(
                 `${process.env.REACT_APP_SERVER_DOMAIN}/friend/respond`,
                 { requestId, action },
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -687,17 +681,12 @@ function App() {
                 action === 'accept' ? 'Friend request accepted!' : 'Friend request rejected.'
             );
 
+            // Backend already sends socket events, so we don't need to emit here
+            // Just update local state
             fetchFriendRequests();
             if (action === 'accept') {
                 fetchFriends();
             }
-
-            const senderId = response.data.senderId;
-            socket.emit('respond_friend_request', {
-                senderId,
-                receiverId: userId,
-                action,
-            });
         } catch (error) {
             handleShowToast("Error", "Failed to respond to friend request.");
         }

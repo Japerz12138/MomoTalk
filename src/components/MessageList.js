@@ -106,25 +106,45 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                 ></span>
                             )}
                         </div>
-                        <div className="flex-grow-1">
-                            <div className="d-flex justify-content-between">
-                                <strong title={msg.nickname}>
+                        <div className="flex-grow-1" style={{ minWidth: 0, overflow: 'hidden' }}>
+                            <div className="d-flex justify-content-between align-items-center" style={{ gap: '8px' }}>
+                                <strong 
+                                    title={msg.nickname}
+                                    style={{ 
+                                        overflow: 'hidden', 
+                                        textOverflow: 'ellipsis', 
+                                        whiteSpace: 'nowrap',
+                                        flex: '1 1 auto',
+                                        minWidth: 0
+                                    }}
+                                >
                                     {truncateNickname(msg.nickname)}
+                                </strong>
+                                <div className="d-flex align-items-center" style={{ gap: '8px', flexShrink: 0 }}>
                                     {(unreadMessagesCount[msg.id] || 0) > 0 && (
                                         <span
                                             className="badge bg-danger rounded-pill"
                                             style={{
-                                                marginLeft: '8px',
                                                 fontSize: '0.7rem',
+                                                minWidth: '18px',
+                                                height: '18px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: '0 6px'
                                             }}
                                         >
-                                        {unreadMessagesCount[msg.id]}
-                                    </span>
+                                            {unreadMessagesCount[msg.id]}
+                                        </span>
                                     )}
-                                </strong>
-                                <small>{formatDate(msg.timestamp)}</small>
+                                    <small style={{ whiteSpace: 'nowrap' }}>{formatDate(msg.timestamp)}</small>
+                                </div>
                             </div>
-                            <p className="mb-0 text-muted">
+                            <p className="mb-0 text-muted" style={{ 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis', 
+                                whiteSpace: 'nowrap' 
+                            }}>
                                 {msg.imageUrl && msg.text ? (
                                     // Image with text: show icon + text preview
                                     <span>

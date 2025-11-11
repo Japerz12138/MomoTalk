@@ -854,6 +854,19 @@ app.post('/friend/add', authenticateToken, (req, res) => {
             const addFriendQuery = 'INSERT INTO friends (user_id, friend_id, status) VALUES (?, ?, "pending")';
             db.query(addFriendQuery, [userId, friendId], (err) => {
                 if (err) return res.status(500).json({ error: err.message });
+                
+                // Get sender username for notification
+                const getUserQuery = 'SELECT username FROM users WHERE id = ?';
+                db.query(getUserQuery, [userId], (userErr, userResults) => {
+                    if (!userErr && userResults.length > 0) {
+                        // Notify receiver via socket
+                        io.to(friendId.toString()).emit('receive_friend_request', {
+                            senderId: userId,
+                            senderUsername: userResults[0].username
+                        });
+                    }
+                });
+                
                 res.json({ message: 'Friend request sent', receiverId: friendId });
             });
         });
@@ -880,6 +893,17 @@ app.post('/friend/accept', authenticateToken, (req, res) => {
             `;
             db.query(reverseFriendQuery, [userId, friendId], (err) => {
                 if (err) return res.status(500).json({ error: err.message });
+                
+                // Notify both users to update friend lists
+                io.to(userId.toString()).emit('update_friend_list');
+                io.to(friendId.toString()).emit('update_friend_list');
+                
+                // Notify sender that request was accepted
+                io.to(friendId.toString()).emit('friend_request_responded', {
+                    receiverId: userId,
+                    action: 'accept'
+                });
+                
                 res.json({ message: 'Friend request accepted and relationship updated' });
             });
         });
@@ -1187,23 +1211,69 @@ app.post('/friend/respond', authenticateToken, (req, res) => {
     const userId = req.user.userId;
 
     if (action === 'accept') {
-        const acceptQuery = `
-            UPDATE friends
-            SET status = 'accepted'
-            WHERE id = ? AND friend_id = ?
-        `;
-        db.query(acceptQuery, [requestId, userId], (err, results) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Friend request accepted', senderId: requestId });
+        // First get the sender's user_id from the request
+        const getRequestQuery = 'SELECT user_id FROM friends WHERE id = ? AND friend_id = ?';
+        db.query(getRequestQuery, [requestId, userId], (getErr, requestResults) => {
+            if (getErr) return res.status(500).json({ error: getErr.message });
+            if (requestResults.length === 0) return res.status(404).json({ error: 'Friend request not found' });
+            
+            const senderId = requestResults[0].user_id;
+            
+            const acceptQuery = `
+                UPDATE friends
+                SET status = 'accepted'
+                WHERE id = ? AND friend_id = ?
+            `;
+            db.query(acceptQuery, [requestId, userId], (err, results) => {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                // Create reverse friendship record
+                const reverseFriendQuery = `
+                    INSERT INTO friends (user_id, friend_id, status)
+                    VALUES (?, ?, "accepted")
+                    ON DUPLICATE KEY UPDATE status = "accepted"
+                `;
+                db.query(reverseFriendQuery, [userId, senderId], (reverseErr) => {
+                    if (reverseErr) return res.status(500).json({ error: reverseErr.message });
+                    
+                    // Notify both users to update friend lists
+                    io.to(userId.toString()).emit('update_friend_list');
+                    io.to(senderId.toString()).emit('update_friend_list');
+                    
+                    // Notify sender that request was accepted
+                    io.to(senderId.toString()).emit('friend_request_responded', {
+                        receiverId: userId,
+                        action: 'accept'
+                    });
+                    
+                    res.json({ message: 'Friend request accepted', senderId: senderId });
+                });
+            });
         });
     } else if (action === 'reject') {
-        const rejectQuery = `
-            DELETE FROM friends
-            WHERE id = ? AND friend_id = ?
-        `;
-        db.query(rejectQuery, [requestId, userId], (err, results) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Friend request rejected', senderId: requestId });
+        // First get the sender's user_id from the request
+        const getRequestQuery = 'SELECT user_id FROM friends WHERE id = ? AND friend_id = ?';
+        db.query(getRequestQuery, [requestId, userId], (getErr, requestResults) => {
+            if (getErr) return res.status(500).json({ error: getErr.message });
+            if (requestResults.length === 0) return res.status(404).json({ error: 'Friend request not found' });
+            
+            const senderId = requestResults[0].user_id;
+            
+            const rejectQuery = `
+                DELETE FROM friends
+                WHERE id = ? AND friend_id = ?
+            `;
+            db.query(rejectQuery, [requestId, userId], (err, results) => {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                // Notify sender that request was rejected
+                io.to(senderId.toString()).emit('friend_request_responded', {
+                    receiverId: userId,
+                    action: 'reject'
+                });
+                
+                res.json({ message: 'Friend request rejected', senderId: senderId });
+            });
         });
     }
 });
@@ -1222,40 +1292,53 @@ app.post('/friend/remove', authenticateToken, (req, res) => {
         WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
     `;
 
-    // Friend Deletion Sequence
-    db.beginTransaction((transactionErr) => {
-        if (transactionErr) {
-            console.error('Transaction start error:', transactionErr.message);
+    // Get a connection from the pool for transaction
+    db.getConnection((err, connection) => {
+        if (err) {
+            console.error('Error getting database connection:', err.message);
             return res.status(500).json({ error: 'Internal server error.' });
         }
 
-        //Delete friend
-        db.query(deleteFriendQuery, [userId, friendId, friendId, userId], (friendErr) => {
-            if (friendErr) {
-                return db.rollback(() => {
-                    console.error('Error deleting friend:', friendErr.message);
-                    return res.status(500).json({ error: 'Failed to remove friend.' });
-                });
+        // Start transaction
+        connection.beginTransaction((transactionErr) => {
+            if (transactionErr) {
+                connection.release();
+                console.error('Transaction start error:', transactionErr.message);
+                return res.status(500).json({ error: 'Internal server error.' });
             }
 
-            //Delete Chat
-            db.query(deleteDMQuery, [userId, friendId, friendId, userId], (dmErr) => {
-                if (dmErr) {
-                    return db.rollback(() => {
-                        console.error('Error deleting DMs:', dmErr.message);
-                        return res.status(500).json({ error: 'Failed to remove DMs.' });
+            //Delete friend
+            connection.query(deleteFriendQuery, [userId, friendId, friendId, userId], (friendErr) => {
+                if (friendErr) {
+                    return connection.rollback(() => {
+                        connection.release();
+                        console.error('Error deleting friend:', friendErr.message);
+                        return res.status(500).json({ error: 'Failed to remove friend.' });
                     });
                 }
 
-                db.commit((commitErr) => {
-                    if (commitErr) {
-                        return db.rollback(() => {
-                            console.error('Transaction commit error:', commitErr.message);
-                            return res.status(500).json({ error: 'Failed to complete transaction.' });
+                //Delete Chat
+                connection.query(deleteDMQuery, [userId, friendId, friendId, userId], (dmErr) => {
+                    if (dmErr) {
+                        return connection.rollback(() => {
+                            connection.release();
+                            console.error('Error deleting DMs:', dmErr.message);
+                            return res.status(500).json({ error: 'Failed to remove DMs.' });
                         });
                     }
 
-                    res.json({ message: 'Friend and DMs removed successfully.' });
+                    connection.commit((commitErr) => {
+                        if (commitErr) {
+                            return connection.rollback(() => {
+                                connection.release();
+                                console.error('Transaction commit error:', commitErr.message);
+                                return res.status(500).json({ error: 'Failed to complete transaction.' });
+                            });
+                        }
+
+                        connection.release();
+                        res.json({ message: 'Friend and DMs removed successfully.' });
+                    });
                 });
             });
         });
