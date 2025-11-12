@@ -4,7 +4,12 @@ import UserMenu from './UserMenu';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
 
-const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChange, nickname, username, avatar, isMobile, onClose }) => {
+const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChange, nickname, username, avatar, isMobile, onClose, unreadMessagesCount, friendRequests }) => {
+    // Calculate if there are unread messages
+    const hasUnreadMessages = unreadMessagesCount && Object.values(unreadMessagesCount).some(count => count > 0);
+    
+    // Calculate if there are pending friend requests
+    const hasPendingRequests = friendRequests && friendRequests.length > 0;
     return (
         <div 
             className={`d-flex flex-column flex-shrink-0 sidebar ${isMobile ? 'mobile-sidebar-content' : ''}`} 
@@ -68,9 +73,27 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                             onSectionChange('chat');
                             if (isMobile && onClose) onClose();
                         }}
+                        style={{ position: 'relative' }}
                     >
                         <i className={`bi bi-chat-dots ${isMobile ? 'me-2' : ''}`} style={{ fontSize: isMobile ? '1.1rem' : '1.5rem' }}></i>
                         {isMobile && <span>Chats</span>}
+                        {hasUnreadMessages && (
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    top: isMobile ? '50%' : '12px',
+                                    right: isMobile ? '16px' : '12px',
+                                    transform: isMobile ? 'translateY(-50%)' : 'none',
+                                    width: '12px',
+                                    height: '12px',
+                                    backgroundColor: '#FF95AA',
+                                    borderRadius: '50%',
+                                    border: '2px solid #495A6E',
+                                    display: 'block',
+                                    flexShrink: 0,
+                                }}
+                            ></span>
+                        )}
                     </a>
                 </li>
                 <li>
@@ -94,9 +117,27 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                             onSectionChange('add-friend');
                             if (isMobile && onClose) onClose();
                         }}
+                        style={{ position: 'relative' }}
                     >
                         <i className={`bi bi-person-plus ${isMobile ? 'me-2' : ''}`} style={{ fontSize: isMobile ? '1.1rem' : '1.5rem' }}></i>
                         {isMobile && <span>Add Friend</span>}
+                        {hasPendingRequests && (
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    top: isMobile ? '50%' : '12px',
+                                    right: isMobile ? '16px' : '12px',
+                                    transform: isMobile ? 'translateY(-50%)' : 'none',
+                                    width: '12px',
+                                    height: '12px',
+                                    backgroundColor: '#FF95AA',
+                                    borderRadius: '50%',
+                                    border: '2px solid #495A6E',
+                                    display: 'block',
+                                    flexShrink: 0,
+                                }}
+                            ></span>
+                        )}
                     </a>
                 </li>
             </ul>

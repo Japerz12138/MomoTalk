@@ -10,6 +10,7 @@ function FriendRequests({ friendRequests, onRespond }) {
                 </div>
             ) : (
                 <div className="list-group">
+                    <h5 className="mb-3" style={{ color: '#FF95AA', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '10px' }}>Pending List</h5>
                     {friendRequests.map(request => (
                         <div
                             key={request.id}

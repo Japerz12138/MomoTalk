@@ -156,8 +156,11 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Serve static files from React build
-app.use(express.static(path.join(__dirname, 'build')));
+// Serve static files from React build (only if build directory exists)
+const staticBuildPath = path.join(__dirname, 'build');
+if (fs.existsSync(staticBuildPath)) {
+    app.use(express.static(staticBuildPath));
+}
 
 // Image access authentication
 app.get('/uploads/*', async (req, res) => {
@@ -547,6 +550,7 @@ app.post('/login', (req, res) => {
                     email: user.email,
                     momoCode: user.momo_code || null,
                     signature: user.signature || '',
+                    birthday: user.birthday || null,
                 });
             });
         });
@@ -781,7 +785,7 @@ app.get('/friends', authenticateToken, (req, res) => {
     const userId = req.user.userId;
 
     const friendsQuery = `
-        SELECT u.id, u.username, u.nickname, u.avatar, u.signature,
+        SELECT u.id, u.username, u.nickname, u.avatar, u.signature, u.birthday,
                (SELECT d.text
                 FROM dms d
                 WHERE (d.sender_id = u.id AND d.receiver_id = ?)
@@ -1149,12 +1153,20 @@ app.post('/upload/chat-image', authenticateToken, upload.single('image'), async 
 });
 
 app.post('/user/update', authenticateToken, async (req, res) => {
-    const { nickname, avatar, signature, oldPassword, newPassword } = req.body;
+    const { nickname, avatar, signature, birthday, oldPassword, newPassword } = req.body;
     const userId = req.user.userId;
 
     // Validate request
-    if (!nickname && !avatar && !signature && (!oldPassword || !newPassword)) {
+    if (!nickname && !avatar && !signature && birthday === undefined && (!oldPassword || !newPassword)) {
         return res.status(400).json({ error: 'No updates provided.' });
+    }
+
+    // Validate birthday format if provided (MM-DD)
+    if (birthday !== undefined && birthday !== null && birthday !== '') {
+        const birthdayRegex = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+        if (!birthdayRegex.test(birthday)) {
+            return res.status(400).json({ error: 'Invalid birthday format. Please use MM-DD format.' });
+        }
     }
 
     try {
@@ -1178,7 +1190,7 @@ app.post('/user/update', authenticateToken, async (req, res) => {
             await db.promise().query(updatePasswordQuery, [hashedPassword, userId]);
         }
 
-        // Handle nickname, avatar, and signature updates
+        // Handle nickname, avatar, signature, and birthday updates
         const updates = [];
         const params = [];
         if (nickname) {
@@ -1193,6 +1205,10 @@ app.post('/user/update', authenticateToken, async (req, res) => {
             updates.push('signature = ?');
             params.push(signature);
         }
+        if (birthday !== undefined) {
+            updates.push('birthday = ?');
+            params.push(birthday || null);
+        }
         if (updates.length > 0) {
             params.push(userId);
             const updateQuery = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
@@ -1203,6 +1219,49 @@ app.post('/user/update', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error updating user profile:', error.message);
         res.status(500).json({ error: 'Failed to update profile.' });
+    }
+});
+
+// Delete user account and all related data
+app.delete('/user/delete', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+
+    try {
+        // Use transaction to ensure all deletions succeed or none
+        const connection = await db.promise().getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Delete all DMs where user is sender or receiver
+            await connection.query('DELETE FROM dms WHERE sender_id = ? OR receiver_id = ?', [userId, userId]);
+
+            // Delete all friend relationships where user is involved
+            await connection.query('DELETE FROM friends WHERE user_id = ? OR friend_id = ?', [userId, userId]);
+
+            // Delete all messages from user
+            await connection.query('DELETE FROM messages WHERE user_id = ?', [userId]);
+
+            // Delete user sessions (should cascade, but delete explicitly to be safe)
+            await connection.query('DELETE FROM user_sessions WHERE user_id = ?', [userId]);
+
+            // Delete favorite emojis (should cascade, but delete explicitly to be safe)
+            await connection.query('DELETE FROM favorite_emojis WHERE user_id = ?', [userId]);
+
+            // Finally, delete the user (this will cascade delete user_sessions and favorite_emojis if foreign keys are set)
+            await connection.query('DELETE FROM users WHERE id = ?', [userId]);
+
+            await connection.commit();
+            connection.release();
+
+            res.json({ message: 'Account deleted successfully.' });
+        } catch (error) {
+            await connection.rollback();
+            connection.release();
+            throw error;
+        }
+    } catch (error) {
+        console.error('Error deleting user account:', error.message);
+        res.status(500).json({ error: 'Failed to delete account.' });
     }
 });
 
@@ -1500,10 +1559,35 @@ const cleanExpiredRequests = () => {
     });
 };
 
-// Serve React app for all other routes
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'build', 'index.html'));
-});
+// Serve React app for all other routes (only in production when build exists)
+// This catch-all route should be last, after all API routes
+const buildPath = path.join(__dirname, 'build');
+const indexPath = path.join(buildPath, 'index.html');
+
+// Check if build directory and index.html exist
+try {
+    if (fs.existsSync(buildPath) && fs.existsSync(indexPath)) {
+        // Only register catch-all route if build files exist (production mode)
+        app.get('*', (req, res) => {
+            // Skip API routes that should return 404
+            if (req.path.startsWith('/api') || 
+                req.path.startsWith('/uploads') || 
+                req.path.startsWith('/socket.io')) {
+                return res.status(404).json({ error: 'Not found' });
+            }
+            
+            // Double check file still exists before sending
+            if (fs.existsSync(indexPath)) {
+                res.sendFile(indexPath);
+            } else {
+                res.status(404).end();
+            }
+        });
+    }
+} catch (error) {
+    // Silently ignore if build directory doesn't exist (development mode)
+    // React dev server will handle routing in development
+}
 
 // Server startup
 server.listen(PORT, () => {

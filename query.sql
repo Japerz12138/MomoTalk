@@ -5,6 +5,7 @@ CREATE TABLE users (
                        password VARCHAR(255) NOT NULL,
                        nickname VARCHAR(50) NOT NULL,
                        avatar VARCHAR(255) DEFAULT NULL,
+                       birthday VARCHAR(5) DEFAULT NULL COMMENT 'MM-DD',
                        session_token VARCHAR(255) DEFAULT NULL,
                        momo_code VARCHAR(14) NOT NULL UNIQUE
 );

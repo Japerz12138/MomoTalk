@@ -23,6 +23,10 @@ const FriendList = ({ friends, onSelectFriend }) => {
         return nickname.includes(query) || username.includes(query) || signature.includes(query);
     });
 
+    // Calculate online and total friends count
+    const onlineFriendsCount = friends.filter(friend => friend.isOnline).length;
+    const totalFriendsCount = friends.length;
+
     return (
         <div style={{ marginTop: 'var(--header-height, 69px)', height: 'calc(100vh - var(--header-height, 69px))', position: 'relative', display: 'flex', flexDirection: 'column' }}>
             {/* Search bar */}
@@ -50,6 +54,31 @@ const FriendList = ({ friends, onSelectFriend }) => {
                         </button>
                     )}
                 </div>
+                {/* Friends count indicator */}
+                {totalFriendsCount > 0 && (
+                    <div style={{ 
+                        marginTop: '8px', 
+                        fontSize: '0.85rem', 
+                        color: '#6c757d',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                    }}>
+                        <span
+                            style={{
+                                width: '8px',
+                                height: '8px',
+                                backgroundColor: '#28a745',
+                                borderRadius: '50%',
+                                display: 'inline-block',
+                                flexShrink: 0
+                            }}
+                        ></span>
+                        <span>
+                            {onlineFriendsCount}/{totalFriendsCount} online
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Friends list */}

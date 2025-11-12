@@ -19,7 +19,13 @@ import { DEFAULT_AVATAR } from './constants';
 
 import { io } from 'socket.io-client';
 
-const socket = io(process.env.REACT_APP_SERVER_DOMAIN);
+const socket = io(process.env.REACT_APP_SERVER_DOMAIN, {
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: Infinity,
+    transports: ['websocket', 'polling']
+});
 
 function App() {
     const [messages, setMessages] = useState([]);
@@ -34,6 +40,7 @@ function App() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [nickname, setNickname] = useState('');
     const [signature, setSignature] = useState('');
+    const [birthday, setBirthday] = useState('');
     const [captcha, setCaptcha] = useState('');
     const [captchaInput, setCaptchaInput] = useState('');
     const [friends, setFriends] = useState([]);
@@ -109,6 +116,7 @@ function App() {
         const savedUserId = localStorage.getItem('userId');
         const savedAvatar = localStorage.getItem('avatar');
         const savedMomoCode = localStorage.getItem('momoCode');
+        const savedBirthday = localStorage.getItem('birthday');
         // console.log('Loaded userId from localStorage:', savedUserId);
         // FOR DEBUG!
         if (savedToken) {
@@ -123,14 +131,38 @@ function App() {
         if (savedAvatar) setAvatar(savedAvatar);
         else setAvatar(DEFAULT_AVATAR);
         if (savedMomoCode) setMomoCode(savedMomoCode);
+        if (savedBirthday) setBirthday(savedBirthday);
     }, []);
 
     // Join room only once when userId is available
     useEffect(() => {
-        if (userId) {
+        if (!userId) return;
+
+        const handleConnect = () => {
+            console.log('Socket connected, joining room for userId:', userId);
             socket.emit('join_room', userId);
-            console.log(`Socket connected for userId: ${userId}`);
+        };
+
+        const handleDisconnect = () => {
+            console.log('Socket disconnected');
+        };
+
+        // If already connected, join room immediately
+        if (socket.connected) {
+            socket.emit('join_room', userId);
+            console.log(`Socket already connected, joined room for userId: ${userId}`);
+        } else {
+            // Wait for connection, then join room
+            socket.once('connect', handleConnect);
         }
+
+        socket.on('connect', handleConnect);
+        socket.on('disconnect', handleDisconnect);
+
+        return () => {
+            socket.off('connect', handleConnect);
+            socket.off('disconnect', handleDisconnect);
+        };
     }, [userId]);
 
     useEffect(() => {
@@ -239,7 +271,13 @@ function App() {
             const uniqueFriends = response.data.filter((friend, index, self) =>
                 index === self.findIndex(f => f.id === friend.id)
             );
-            setFriends(uniqueFriends);
+            // Sort friends by lastMessageTime (most recent first), then by addedAt for friends without messages
+            const sortedFriends = uniqueFriends.sort((a, b) => {
+                const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                return timeB - timeA; // Descending order (newest first)
+            });
+            setFriends(sortedFriends);
             
             // Request fresh online status after fetching friends
             if (uniqueFriends.length > 0) {
@@ -284,6 +322,9 @@ function App() {
         if (!userId) return;
 
         const handleReceiveMessage = (message) => {
+            // Use current activeSection and selectedFriend from closure
+            const currentActiveSection = activeSection;
+            const currentSelectedFriend = selectedFriend;
             console.log('Received message:', message);
 
             // Skip if this is a message we just sent
@@ -321,7 +362,10 @@ function App() {
                 };
 
                 // Update unread count if not viewing this friend's chat
-                if (!selectedFriend || friendId !== selectedFriend.id) {
+                // Check if we're in chat section AND viewing this specific friend's chat
+                const isViewingThisFriend = currentActiveSection === 'chat' && currentSelectedFriend && currentSelectedFriend.id === friendId;
+                
+                if (!isViewingThisFriend) {
                     setUnreadMessagesCount((prev) => {
                         const updated = {
                             ...prev,
@@ -362,7 +406,8 @@ function App() {
                     return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 });
 
-                return prevFriends.map((friend) =>
+                // Update friend and move to top of list (sorted by lastMessageTime)
+                const updatedFriends = prevFriends.map((friend) =>
                     friend.id === friendId
                         ? {
                             ...friend,
@@ -373,6 +418,13 @@ function App() {
                         }
                         : friend
                 );
+
+                // Sort friends by lastMessageTime (most recent first), then by addedAt for friends without messages
+                return updatedFriends.sort((a, b) => {
+                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                    return timeB - timeA; // Descending order (newest first)
+                });
             });
         };
 
@@ -381,7 +433,7 @@ function App() {
         return () => {
             socket.off('receive_message', handleReceiveMessage);
         };
-    }, [userId, selectedFriend]);
+    }, [userId, activeSection, selectedFriend]);
 
     useEffect(() => {
         // Use socket (global) since user joins room via socket
@@ -538,6 +590,46 @@ function App() {
         }
     };
 
+    const handleDeleteAccount = () => {
+        // Clear all local storage
+        localStorage.clear();
+        
+        // Disconnect socket if exists
+        if (socketInstance) {
+            socketInstance.emit('leave_room', userId);
+            socketInstance.removeAllListeners();
+            socketInstance.disconnect();
+        }
+        if (socket && socket.connected) {
+            socket.emit('leave_room', userId);
+            socket.disconnect();
+        }
+        
+        // Reset all state
+        setToken(null);
+        setUsername('');
+        setPassword('');
+        setNickname('');
+        setSignature('');
+        setBirthday('');
+        setUserId(null);
+        setAvatar('');
+        setMomoCode('');
+        setFriends([]);
+        setFriendRequests([]);
+        setSelectedFriend(null);
+        setDms([]);
+        setMessages([]);
+        setUnreadMessagesCount({});
+        
+        // Clear axios default headers
+        delete axios.defaults.headers.common['Authorization'];
+        
+        // Redirect to login
+        setActiveSection('login');
+        setError('');
+    };
+
     const toggleDarkMode = () => {
         setIsDarkMode((prev) => !prev);
     };
@@ -567,7 +659,7 @@ function App() {
         e.preventDefault();
         try {
             const response = await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/login`, { username, password });
-            const { token, refreshToken, username: loggedInUsername, nickname: loggedInNickname, signature: userSignature, userId: loggedInUserId, avatar, momoCode: userMomoCode } = response.data;
+            const { token, refreshToken, username: loggedInUsername, nickname: loggedInNickname, signature: userSignature, userId: loggedInUserId, avatar, momoCode: userMomoCode, birthday: userBirthday } = response.data;
 
             setToken(token);
             setUsername(loggedInUsername);
@@ -576,6 +668,7 @@ function App() {
             setUserId(loggedInUserId);
             setAvatar(avatar || DEFAULT_AVATAR);
             setMomoCode(userMomoCode || '');
+            setBirthday(userBirthday || '');
 
             localStorage.setItem('token', token);
             if (refreshToken) {
@@ -587,6 +680,7 @@ function App() {
             localStorage.setItem('userId', loggedInUserId);
             localStorage.setItem('avatar', avatar || DEFAULT_AVATAR);
             localStorage.setItem('momoCode', userMomoCode || '');
+            localStorage.setItem('birthday', userBirthday || '');
 
             //init socket for current user
             const newSocket = initializeSocket(loggedInUserId);
@@ -833,6 +927,18 @@ function App() {
         const hasText = input.trim();
         const hasImages = imageUrls && imageUrls.length > 0;
         
+        // Ensure socket is connected before sending
+        if (!socket.connected) {
+            console.warn('Socket not connected, attempting to reconnect...');
+            socket.connect();
+            // Wait a bit for connection, then retry
+            setTimeout(() => {
+                if (socket.connected && userId) {
+                    socket.emit('join_room', userId);
+                }
+            }, 1000);
+        }
+        
         if ((hasText || hasImages) && selectedFriend) {
             // If multiple images, send them separately; if single image or text+image, send together
             if (hasImages && hasImages.length === 1 && hasText) {
@@ -860,9 +966,9 @@ function App() {
                 setInput('');
                 setImageQueue([]); // Clear queue after sending
 
-                //Update messageList
-                setFriends((prevFriends) =>
-                    prevFriends.map((friend) =>
+                //Update messageList and sort by lastMessageTime
+                setFriends((prevFriends) => {
+                    const updated = prevFriends.map((friend) =>
                         friend.id === selectedFriend.id
                             ? {
                                 ...friend,
@@ -870,8 +976,14 @@ function App() {
                                 lastMessageTime: newMessage.timestamp,
                             }
                             : friend
-                    )
-                );
+                    );
+                    // Sort by lastMessageTime (most recent first)
+                    return updated.sort((a, b) => {
+                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                        return timeB - timeA;
+                    });
+                });
             } else {
                 // Multiple images or images only - send text first (if any), then images
                 if (hasText) {
@@ -917,10 +1029,10 @@ function App() {
                 setInput('');
                 setImageQueue([]); // Clear queue after sending
 
-                //Update messageList
+                //Update messageList and sort by lastMessageTime
                 const lastMessage = hasText ? input.trim() : '[Image]';
-                setFriends((prevFriends) =>
-                    prevFriends.map((friend) =>
+                setFriends((prevFriends) => {
+                    const updated = prevFriends.map((friend) =>
                         friend.id === selectedFriend.id
                             ? {
                                 ...friend,
@@ -928,14 +1040,29 @@ function App() {
                                 lastMessageTime: new Date().toISOString(),
                             }
                             : friend
-                    )
-                );
+                    );
+                    // Sort by lastMessageTime (most recent first)
+                    return updated.sort((a, b) => {
+                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                        return timeB - timeA;
+                    });
+                });
             }
         }
     };
 
     // Used for emoji panel - sends immediately (not queued)
     const handleImageUpload = (imageUrl) => {
+        // Ensure socket is connected before sending
+        if (!socket.connected) {
+            console.warn('Socket not connected, attempting to reconnect...');
+            socket.connect();
+            if (userId) {
+                setTimeout(() => socket.emit('join_room', userId), 1000);
+            }
+        }
+        
         if (imageUrl && selectedFriend) {
             const newMessage = {
                 senderId: userId,
@@ -959,9 +1086,9 @@ function App() {
 
             setInput(''); // Clear text input after sending
 
-            //Update messageList to show latest messages with image indicator
-            setFriends((prevFriends) =>
-                prevFriends.map((friend) =>
+            //Update messageList to show latest messages with image indicator and sort
+            setFriends((prevFriends) => {
+                const updated = prevFriends.map((friend) =>
                     friend.id === selectedFriend.id
                         ? {
                             ...friend,
@@ -970,8 +1097,14 @@ function App() {
                             imageUrl: imageUrl,
                         }
                         : friend
-                )
-            );
+                );
+                // Sort by lastMessageTime (most recent first)
+                return updated.sort((a, b) => {
+                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                    return timeB - timeA;
+                });
+            });
         }
     };
 
@@ -1241,6 +1374,8 @@ function App() {
                                     avatar={avatar}
                                     isMobile={true}
                                     onClose={closeSidebar}
+                                    unreadMessagesCount={unreadMessagesCount}
+                                    friendRequests={friendRequests}
                                 />
                             </div>
 
@@ -1322,20 +1457,23 @@ function App() {
                                             onUpdatePassword={handleUpdatePassword}
                                             onToggleDarkMode={toggleDarkMode}
                                             onToggleAutoMode={toggleAutoMode}
-                                            onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature }) => {
+                                            onDeleteAccount={handleDeleteAccount}
+                                            onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature, birthday: newBirthday }) => {
                                                 try {
                                                     const response = await axios.post(
                                                         `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
-                                                        { nickname, avatar: newAvatar, signature: newSignature },
+                                                        { nickname, avatar: newAvatar, signature: newSignature, birthday: newBirthday },
                                                         { headers: { Authorization: `Bearer ${token}` } }
                                                     );
                                                     alert(response.data.message);
                                                     setNickname(nickname);
                                                     setAvatar(newAvatar || DEFAULT_AVATAR);
                                                     setSignature(newSignature || '');
+                                                    setBirthday(newBirthday || '');
                                                     localStorage.setItem('nickname', nickname);
                                                     localStorage.setItem('avatar', newAvatar || DEFAULT_AVATAR);
                                                     localStorage.setItem('signature', newSignature || '');
+                                                    localStorage.setItem('birthday', newBirthday || '');
                                                 } catch (error) {
                                                     console.error('Error updating profile:', error.response?.data || error.message);
                                                     alert('Failed to update profile.');
@@ -1349,23 +1487,25 @@ function App() {
                                 {activeSection === 'profile' && (
                                     <div style={{ height: '100%', overflow: 'auto' }}>
                                         <UserProfile
-                                            user={{ username, nickname, avatar, momoCode, signature }}
+                                            user={{ username, nickname, avatar, momoCode, signature, birthday }}
                                             isOwnProfile={true}
                                             onClose={() => setActiveSection('chat')}
-                                            onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature }) => {
+                                            onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature, birthday: newBirthday }) => {
                                                 try {
                                                     const response = await axios.post(
                                                         `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
-                                                        { nickname, avatar: newAvatar, signature: newSignature },
+                                                        { nickname, avatar: newAvatar, signature: newSignature, birthday: newBirthday },
                                                         { headers: { Authorization: `Bearer ${token}` } }
                                                     );
                                                     alert(response.data.message);
                                                     setNickname(nickname);
                                                     setAvatar(newAvatar || DEFAULT_AVATAR);
                                                     setSignature(newSignature || '');
+                                                    setBirthday(newBirthday || '');
                                                     localStorage.setItem('nickname', nickname);
                                                     localStorage.setItem('avatar', newAvatar || DEFAULT_AVATAR);
                                                     localStorage.setItem('signature', newSignature || '');
+                                                    localStorage.setItem('birthday', newBirthday || '');
                                                 } catch (error) {
                                                     console.error('Error updating profile:', error.response?.data || error.message);
                                                     alert('Failed to update profile.');
@@ -1409,6 +1549,8 @@ function App() {
                                 nickname={nickname}
                                 username={username}
                                 avatar={avatar}
+                                unreadMessagesCount={unreadMessagesCount}
+                                friendRequests={friendRequests}
                             />
 
                             <div
@@ -1519,23 +1661,25 @@ function App() {
                                 )}
                                 {activeSection === 'profile' && (
                                     <UserProfile
-                                        user={{ username, nickname, avatar, momoCode, signature }}
+                                        user={{ username, nickname, avatar, momoCode, signature, birthday }}
                                         isOwnProfile={true}
-                                        onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature }) => {
+                                        onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature, birthday: newBirthday }) => {
                                             const updatedAvatar = newAvatar || avatar;
                                             try {
                                                 const response = await axios.post(
                                                     `${process.env.REACT_APP_SERVER_DOMAIN}/user/update`,
-                                                    { nickname, avatar: updatedAvatar, signature: newSignature },
+                                                    { nickname, avatar: updatedAvatar, signature: newSignature, birthday: newBirthday },
                                                     { headers: { Authorization: `Bearer ${token}` } }
                                                 );
                                                 alert(response.data.message);
                                                 setNickname(nickname);
                                                 setAvatar(updatedAvatar || DEFAULT_AVATAR);
                                                 setSignature(newSignature || '');
+                                                setBirthday(newBirthday || '');
                                                 localStorage.setItem('nickname', nickname);
                                                 localStorage.setItem('avatar', updatedAvatar || DEFAULT_AVATAR);
                                                 localStorage.setItem('signature', newSignature || '');
+                                                localStorage.setItem('birthday', newBirthday || '');
                                             } catch (error) {
                                                 console.error('Error updating profile:', error.response?.data || error.message);
                                                 alert('Failed to update profile.');
@@ -1551,6 +1695,7 @@ function App() {
                                         isAutoMode={isAutoMode}
                                         onToggleDarkMode={toggleDarkMode}
                                         onToggleAutoMode={toggleAutoMode}
+                                        onDeleteAccount={handleDeleteAccount}
                                     />
                                 )}
                             </div>

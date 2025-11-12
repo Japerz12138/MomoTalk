@@ -60,12 +60,12 @@ function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friends
         <div className="mb-4" style={{ marginTop: '10px', marginLeft: '8px', marginRight: '5px' }}>
             {/* Display user's own Momo Code */}
             {loggedInMomoCode && (
-                <div className="alert alert-info" style={{ marginBottom: '15px', textAlign: 'center' }}>
-                    <strong>Your Momo Code:</strong>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginTop: '5px', letterSpacing: '2px' }}>
+                <div className="alert alert-info" style={{ marginBottom: '15px', textAlign: 'center', backgroundColor: 'rgba(255, 119, 155, 0.2)', border: '1px solid #FF95AA'}}>
+                    <strong style={{ color: 'rgba(255, 97, 126, 0.8)' }}>Your Momo Code:</strong>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginTop: '5px', letterSpacing: '2px', color: 'rgba(255, 65, 100, 0.8)' }}>
                         {loggedInMomoCode}
                     </div>
-                    <small style={{ color: '#666' }}>Share this code with friends to connect!</small>
+                    <small style={{ color: 'rgba(255, 97, 126, 0.8)' }}>Share this code with friends to connect!</small>
                 </div>
             )}
 

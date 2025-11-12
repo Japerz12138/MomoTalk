@@ -9,6 +9,8 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState('');
     const [newInput, setNewInput] = useState('');
+    const [birthdayMonth, setBirthdayMonth] = useState('');
+    const [birthdayDay, setBirthdayDay] = useState('');
     const [showRemoveFriendModal, setShowRemoveFriendModal] = useState(false);
     const [uploadError, setUploadError] = useState('');
 
@@ -18,6 +20,15 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
             setNewInput(user.nickname || '');
         } else if (type === 'signature') {
             setNewInput(user.signature || '');
+        } else if (type === 'birthday') {
+            if (user.birthday) {
+                const [month, day] = user.birthday.split('-');
+                setBirthdayMonth(month || '');
+                setBirthdayDay(day || '');
+            } else {
+                setBirthdayMonth('');
+                setBirthdayDay('');
+            }
         } else {
             setNewInput('');
         }
@@ -43,8 +54,13 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
             });
 
             if (response.data.avatarUrl) {
-                // Update the profile with new avatar URL
-                onUpdateProfile({ nickname: user.nickname, avatar: response.data.avatarUrl });
+                // Update the profile with new avatar URL, preserving signature and birthday
+                onUpdateProfile({ 
+                    nickname: user.nickname, 
+                    avatar: response.data.avatarUrl,
+                    signature: user.signature,
+                    birthday: user.birthday
+                });
                 setShowModal(false);
             }
         } catch (error) {
@@ -55,12 +71,31 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
 
     const handleSave = () => {
         if (modalType === 'nickname') {
-            onUpdateProfile({ nickname: newInput, avatar: user.avatar, signature: user.signature });
+            onUpdateProfile({ nickname: newInput, avatar: user.avatar, signature: user.signature, birthday: user.birthday });
             setShowModal(false);
         } else if (modalType === 'signature') {
-            onUpdateProfile({ nickname: user.nickname, avatar: user.avatar, signature: newInput });
+            onUpdateProfile({ nickname: user.nickname, avatar: user.avatar, signature: newInput, birthday: user.birthday });
+            setShowModal(false);
+        } else if (modalType === 'birthday') {
+            if (birthdayMonth && birthdayDay) {
+                const birthday = `${birthdayMonth.padStart(2, '0')}-${birthdayDay.padStart(2, '0')}`;
+                onUpdateProfile({ nickname: user.nickname, avatar: user.avatar, signature: user.signature, birthday: birthday });
+            } else {
+                // Clear birthday if both are empty
+                onUpdateProfile({ nickname: user.nickname, avatar: user.avatar, signature: user.signature, birthday: '' });
+            }
             setShowModal(false);
         }
+    };
+
+    // Format birthday for display (MM-DD -> Month Day)
+    const formatBirthday = (birthday) => {
+        if (!birthday) return null;
+        const [month, day] = birthday.split('-');
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthName = monthNames[parseInt(month) - 1];
+        return `${monthName} ${parseInt(day)}`;
     };
 
     return (
@@ -143,6 +178,24 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                     <p className="text-muted" style={{ fontSize: '0.95rem', marginTop: isOwnProfile ? '5px' : '10px' }}>
                         {user.signature || (isOwnProfile ? 'No signature yet' : '')}
                     </p>
+                    {user.birthday && (
+                        <div style={{
+                            marginTop: '10px',
+                            marginBottom: '10px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px 12px',
+                            borderRadius: '25px',
+                            border: '2.5px solid rgba(73, 90, 110, 0.5)',
+                            backgroundColor: 'transparent'
+                        }}>
+                            <i className="bi bi-cake2-fill" style={{ color: '#495A6E', fontSize: '1rem' }}></i>
+                            <span style={{ color: '#495A6E', fontSize: '0.9rem', fontWeight: '500' }}>
+                                {formatBirthday(user.birthday)}
+                            </span>
+                        </div>
+                    )}
                     {user.momoCode && (
                         <div style={{ 
                             marginTop: '10px', 
@@ -179,6 +232,12 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                             >
                                 Change Signature
                             </button>
+                            <button
+                                className="btn custom-btn"
+                                onClick={() => handleEditClick('birthday')}
+                            >
+                                Change Birthday
+                            </button>
                         </div>
                     )}
 
@@ -210,7 +269,10 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                             <div className="modal-header">
                                 <h5 className="modal-title">
                                     <i className="bi bi-pen"></i>
-                                    {modalType === 'avatar' ? '  Edit Avatar' : modalType === 'signature' ? '  Edit Signature' : '  Edit Nickname'}
+                                    {modalType === 'avatar' ? '  Edit Avatar' : 
+                                     modalType === 'signature' ? '  Edit Signature' : 
+                                     modalType === 'birthday' ? '  Edit Birthday' : 
+                                     '  Edit Nickname'}
                                 </h5>
                                 <button
                                     type="button"
@@ -243,6 +305,65 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                         />
                                         <small className="text-muted">Maximum 30 characters</small>
                                     </div>
+                                ) : modalType === 'birthday' ? (
+                                    <div>
+                                        <label className="form-label">
+                                            Select your birthday (Month and Day):
+                                        </label>
+                                        <div className="row">
+                                            <div className="col-6">
+                                                <label htmlFor="birthdayMonth" className="form-label small">Month</label>
+                                                <select
+                                                    id="birthdayMonth"
+                                                    className="form-select"
+                                                    value={birthdayMonth}
+                                                    onChange={(e) => setBirthdayMonth(e.target.value)}
+                                                >
+                                                    <option value="">Select Month</option>
+                                                    {Array.from({ length: 12 }, (_, i) => {
+                                                        const monthNum = i + 1;
+                                                        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                                                                         'July', 'August', 'September', 'October', 'November', 'December'];
+                                                        return (
+                                                            <option key={monthNum} value={monthNum.toString().padStart(2, '0')}>
+                                                                {monthNames[i]}
+                                                            </option>
+                                                        );
+                                                    })}
+                                                </select>
+                                            </div>
+                                            <div className="col-6">
+                                                <label htmlFor="birthdayDay" className="form-label small">Day</label>
+                                                <select
+                                                    id="birthdayDay"
+                                                    className="form-select"
+                                                    value={birthdayDay}
+                                                    onChange={(e) => setBirthdayDay(e.target.value)}
+                                                >
+                                                    <option value="">Select Day</option>
+                                                    {Array.from({ length: 31 }, (_, i) => {
+                                                        const day = i + 1;
+                                                        return (
+                                                            <option key={day} value={day.toString().padStart(2, '0')}>
+                                                                {day}
+                                                            </option>
+                                                        );
+                                                    })}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <small className="text-muted d-block mt-2">Year is not required</small>
+                                        <button
+                                            type="button"
+                                            className="btn btn-link btn-sm p-0 mt-2"
+                                            onClick={() => {
+                                                setBirthdayMonth('');
+                                                setBirthdayDay('');
+                                            }}
+                                        >
+                                            Clear birthday
+                                        </button>
+                                    </div>
                                 ) : (
                                     <div>
                                         <label htmlFor="inputField" className="form-label">
@@ -258,7 +379,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                     </div>
                                 )}
                             </div>
-                            {(modalType === 'nickname' || modalType === 'signature') && (
+                            {(modalType === 'nickname' || modalType === 'signature' || modalType === 'birthday') && (
                                 <div className="modal-footer">
                                     <button
                                         type="button"
