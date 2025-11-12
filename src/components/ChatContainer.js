@@ -90,6 +90,35 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
         return date.toLocaleString();
     };
 
+    const formatDateSeparator = (timestamp) => {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const diffDays = Math.floor((today - messageDate) / (1000 * 60 * 60 * 24));
+        
+        const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        
+        if (diffDays === 0) {
+            return 'Today ' + time;
+        } else if (diffDays === 1) {
+            return 'Yesterday ' + time;
+        } else if (diffDays < 7) {
+            return weekdays[date.getDay()] + ' ' + time;
+        } else {
+            // Put zh-CN for now, might gonna change it later.
+            return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) + ' ' + time;
+        }
+    };
+
+    const shouldShowDateSeparator = (currentMessage, previousMessage) => {
+        if (!previousMessage) return true;
+        const currentDate = new Date(currentMessage.timestamp);
+        const previousDate = new Date(previousMessage.timestamp);
+        return currentDate.toDateString() !== previousDate.toDateString();
+    };
+
     const handleSaveFavoriteEmoji = async (imageUrl, e) => {
         e.stopPropagation();
         setSavingEmoji(true);
@@ -216,115 +245,154 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                 <h5 className="text-center text-muted mb-3">{'Chat with ' + currentChat || 'Select a conversation'}</h5>
             )}
             {messages.length > 0 ? (
-                messages.map((message, index) => (
-                    <div
-                        key={index}
-                        className="message-wrapper mb-3"
-                        onMouseEnter={() => setHoveredMessageIndex(index)}
-                        onMouseLeave={() => setHoveredMessageIndex(null)}
-                        style={{ position: 'relative' }}
-                    >
-                        <div
-                            className={`d-flex ${message.self ? 'justify-content-end' : 'align-items-start'}`}
-                        >
-                            {!message.self && (
-                                <img
-                                    src={getFullImageUrl(message.avatar || DEFAULT_AVATAR)}
-                                    alt="avatar"
-                                    width="40"
-                                    height="40"
-                                    className="rounded-circle me-2"
-                                    style={{ objectFit: 'cover', objectPosition: 'center' }}
-                                />
+                messages.map((message, index) => {
+                    const previousMessage = index > 0 ? messages[index - 1] : null;
+                    const showSeparator = shouldShowDateSeparator(message, previousMessage);
+                    
+                    return (
+                        <React.Fragment key={index}>
+                            {showSeparator && (
+                                <div style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    margin: '20px 0',
+                                    position: 'relative'
+                                }}>
+                                    <div style={{
+                                        flex: 1,
+                                        height: '1px',
+                                        backgroundColor: '#e0e0e0',
+                                        marginRight: '12px'
+                                    }}></div>
+                                    <span style={{
+                                        padding: '4px 12px',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                                        borderRadius: '12px',
+                                        color: '#6c757d',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 500,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {formatDateSeparator(message.timestamp)}
+                                    </span>
+                                    <div style={{
+                                        flex: 1,
+                                        height: '1px',
+                                        backgroundColor: '#e0e0e0',
+                                        marginLeft: '12px'
+                                    }}></div>
+                                </div>
                             )}
-                            <div className={`chat-bubble ${message.self ? 'self' : 'other'}`}>
-                                {message.imageUrl && (
-                                    <div
-                                        style={{ 
-                                            position: 'relative', 
-                                            display: 'inline-block',
-                                            maxWidth: '100%',
-                                            overflow: 'hidden'
-                                        }}
-                                        onMouseEnter={() => setHoveredImageIndex(index)}
-                                        onMouseLeave={() => setHoveredImageIndex(null)}
-                                    >
-                                        <img 
-                                            src={getFullImageUrl(message.imageUrl)} 
-                                            alt="chat" 
-                                            style={{ 
-                                                maxWidth: '100%',
-                                                maxHeight: '300px',
-                                                width: 'auto',
-                                                height: 'auto',
-                                                borderRadius: '8px',
-                                                cursor: 'pointer',
-                                                display: 'block',
-                                                marginBottom: message.text ? '8px' : '0',
-                                                objectFit: 'contain'
-                                            }}
-                                            onClick={() => setFullImageView(getFullImageUrl(message.imageUrl))}
-                                            onLoad={handleImageLoad}
-                                            onError={handleImageLoad}
+                            <div
+                                className="message-wrapper mb-3"
+                                onMouseEnter={() => setHoveredMessageIndex(index)}
+                                onMouseLeave={() => setHoveredMessageIndex(null)}
+                                style={{ position: 'relative' }}
+                            >
+                                <div
+                                    className={`d-flex ${message.self ? 'justify-content-end' : 'align-items-start'}`}
+                                >
+                                    {!message.self && (
+                                        <img
+                                            src={getFullImageUrl(message.avatar || DEFAULT_AVATAR)}
+                                            alt="avatar"
+                                            width="40"
+                                            height="40"
+                                            className="rounded-circle me-2"
+                                            style={{ objectFit: 'cover', objectPosition: 'center' }}
                                         />
-                                        {hoveredImageIndex === index && !savingEmoji && (
-                                            <button
-                                                className="btn btn-sm star-favorite-btn"
-                                                onClick={(e) => handleSaveFavoriteEmoji(message.imageUrl, e)}
-                                                style={{
-                                                    position: 'absolute',
-                                                    top: '8px',
-                                                    right: '8px',
-                                                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                                    border: '1px solid #dee2e6',
-                                                    borderRadius: '50%',
-                                                    width: '36px',
-                                                    height: '36px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    padding: 0,
-                                                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                                                    transition: 'all 0.2s',
-                                                    cursor: 'pointer'
+                                    )}
+                                    <div className={`chat-bubble ${message.self ? 'self' : 'other'}`}>
+                                        {message.imageUrl && (
+                                            <div
+                                                style={{ 
+                                                    position: 'relative', 
+                                                    display: 'inline-block',
+                                                    maxWidth: '100%',
+                                                    overflow: 'hidden'
                                                 }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.backgroundColor = '#4C5B6F';
-                                                    e.currentTarget.style.transform = 'scale(1.1)';
-                                                    e.currentTarget.querySelector('i').style.color = 'white';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
-                                                    e.currentTarget.style.transform = 'scale(1)';
-                                                    e.currentTarget.querySelector('i').style.color = '#4C5B6F';
-                                                }}
-                                                title="Add to favorites"
+                                                onMouseEnter={() => setHoveredImageIndex(index)}
+                                                onMouseLeave={() => setHoveredImageIndex(null)}
                                             >
-                                                <i className="bi bi-star-fill" style={{ fontSize: '1rem', color: '#4C5B6F' }}></i>
-                                            </button>
+                                                <img 
+                                                    src={getFullImageUrl(message.imageUrl)} 
+                                                    alt="chat" 
+                                                    style={{ 
+                                                        maxWidth: '100%',
+                                                        maxHeight: '300px',
+                                                        width: 'auto',
+                                                        height: 'auto',
+                                                        borderRadius: '8px',
+                                                        cursor: 'pointer',
+                                                        display: 'block',
+                                                        marginBottom: message.text ? '8px' : '0',
+                                                        objectFit: 'contain'
+                                                    }}
+                                                    onClick={() => setFullImageView(getFullImageUrl(message.imageUrl))}
+                                                    onLoad={handleImageLoad}
+                                                    onError={handleImageLoad}
+                                                />
+                                                {hoveredImageIndex === index && !savingEmoji && (
+                                                    <button
+                                                        className="btn btn-sm star-favorite-btn"
+                                                        onClick={(e) => handleSaveFavoriteEmoji(message.imageUrl, e)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: '8px',
+                                                            right: '8px',
+                                                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                                            border: '1px solid #dee2e6',
+                                                            borderRadius: '50%',
+                                                            width: '36px',
+                                                            height: '36px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            padding: 0,
+                                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                                                            transition: 'all 0.2s',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#4C5B6F';
+                                                            e.currentTarget.style.transform = 'scale(1.1)';
+                                                            e.currentTarget.querySelector('i').style.color = 'white';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+                                                            e.currentTarget.style.transform = 'scale(1)';
+                                                            e.currentTarget.querySelector('i').style.color = '#4C5B6F';
+                                                        }}
+                                                        title="Add to favorites"
+                                                    >
+                                                        <i className="bi bi-star-fill" style={{ fontSize: '1rem', color: '#4C5B6F' }}></i>
+                                                    </button>
+                                                )}
+                                            </div>
                                         )}
+                                        {message.text && <div>{message.text}</div>}
+                                    </div>
+                                </div>
+                                {hoveredMessageIndex === index && (
+                                    <div
+                                        className="timestamp text-muted"
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: '-20px',
+                                            fontSize: '0.75rem',
+                                            textAlign: message.self ? 'right' : 'left',
+                                            left: message.self ? 'auto' : '50px',
+                                            right: message.self ? '10px' : 'auto',
+                                        }}
+                                    >
+                                        {formatTimestamp(message.timestamp)}
                                     </div>
                                 )}
-                                {message.text && <div>{message.text}</div>}
                             </div>
-                        </div>
-                        {hoveredMessageIndex === index && (
-                            <div
-                                className="timestamp text-muted"
-                                style={{
-                                    position: 'absolute',
-                                    bottom: '-20px',
-                                    fontSize: '0.75rem',
-                                    textAlign: message.self ? 'right' : 'left',
-                                    left: message.self ? 'auto' : '50px',
-                                    right: message.self ? '10px' : 'auto',
-                                }}
-                            >
-                                {formatTimestamp(message.timestamp)}
-                            </div>
-                        )}
-                    </div>
-                ))
+                        </React.Fragment>
+                    );
+                })
             ) : (
                 <div className="text-center d-flex flex-column align-items-center">
                     <i className="bi bi-chat-left-heart mb-3" style={{ fontSize: '3rem', color: '#6c757d' }}></i>
