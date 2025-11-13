@@ -42,7 +42,8 @@ const DB_CONFIG = {
     queueLimit: 0,
     acquireTimeout: 60000,
     timeout: 60000,
-    reconnect: true
+    reconnect: true,
+    charset: 'utf8mb4'
 };
 
 if (!DB_CONFIG.user || !DB_CONFIG.password || !DB_CONFIG.database) {
@@ -409,21 +410,34 @@ io.on('connection', (socket) => {
     socket.on('send_message', (data) => {
         const { senderId, receiverId, text, imageUrl } = data;
 
-        if (!senderId || !receiverId || (!text && !imageUrl)) {
-            console.error('Invalid message payload:', data);
+        // Validate: must have senderId, receiverId, and at least text or imageUrl
+        if (!senderId || !receiverId) {
+            console.error('Invalid message payload: missing senderId or receiverId', data);
+            return;
+        }
+
+        // Check if text has content (including emoji) or if there's an image
+        const hasText = text && text.trim().length > 0;
+        const hasImage = imageUrl && imageUrl.trim().length > 0;
+
+        if (!hasText && !hasImage) {
+            console.error('Invalid message payload: missing text and imageUrl', data);
             return;
         }
 
         // Determine message type
         let messageType = 'text';
-        if (text && imageUrl) {
+        if (hasText && hasImage) {
             messageType = 'both';
-        } else if (imageUrl) {
+        } else if (hasImage) {
             messageType = 'image';
         }
 
+        // Prepare text value: use trimmed text if available, otherwise empty string (since text field is NOT NULL)
+        const textValue = hasText ? text.trim() : '';
+
         const query = 'INSERT INTO dms (sender_id, receiver_id, text, image_url, message_type, timestamp) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP());';
-        db.query(query, [senderId, receiverId, text || null, imageUrl || null, messageType], (err) => {
+        db.query(query, [senderId, receiverId, textValue, hasImage ? imageUrl : null, messageType], (err) => {
             if (!err) {
                 const userQuery = 'SELECT nickname, avatar FROM users WHERE id = ?';
                 db.query(userQuery, [senderId], (userErr, userResults) => {
@@ -433,8 +447,8 @@ io.on('connection', (socket) => {
                         io.to(receiverId.toString()).emit('receive_message', {
                             senderId,
                             receiverId,
-                            text,
-                            imageUrl,
+                            text: hasText ? textValue : null,
+                            imageUrl: hasImage ? imageUrl : null,
                             messageType,
                             timestamp: new Date().toISOString(), //TO UTC TIME
                             nickname,

@@ -1,7 +1,53 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 
 const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleEmojiPanel, imageQueue = [], onAddImageToQueue, onRemoveImageFromQueue }) => {
     const fileInputRef = useRef(null);
+    const inputRef = useRef(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+    // Common emojis
+    const commonEmojis = [
+         '😀', '😃', '😄', '😁', '😆',
+         '😅', '😂', '🤣', '😊', '😇', 
+         '🙂', '🙃', '😉', '😌', '😍', 
+         '🥰', '😘', '😗', '😙', '😚', 
+         '😋', '😛', '😝', '😜', '🤪', 
+         '🤨', '🧐', '🤓', '😎', '🤩', 
+         '🥳', '😏', '😒', '😞', '😔', 
+         '😟', '😕', '🙁', '😣', '😖', 
+         '😫', '😩', '🥺', '😢', '😭', 
+         '😤', '😠', '😡', '🤬', '🤯', 
+         '😳', '🥵', '🥶', '😱', '😨', 
+         '😰', '😥', '😓', '🤗', '🤔', 
+         '🤭', '🤫', '🤥', '😶', '😐',
+         '😑', '😬', '🙄', '😯', '😦',
+         '😧', '😮', '😲', '🥱', '😴',
+         '🤤', '😪', '😵', '🤐', '🥴',
+         '🤢', '🤮', '🤧', '😷', '🤒', 
+         '🤕', '🤑', '🤠', '😈', '👿', 
+         '👹', '👺', '🤡', '💩', '👻',
+         '💀', '☠️', '👽', '👾', '🤖', 
+         '🎃', '😺', '😸', '😹', '😻', 
+         '😼', '😽', '🙀', '😿', '😾',
+         '👀', '👁️', '👂', '👃', '👄',
+         '👅', '👆', '👇', '👈', '👉',
+         '👊', '👋', '👌', '👍', '👎',
+         '👏', '👐'];
+    
+    const handleEmojiClick = (emoji) => {
+        const input = inputRef.current;
+        if (input) {
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const newValue = input.value.substring(0, start) + emoji + input.value.substring(end);
+            onInputChange({ target: { value: newValue } });
+            setTimeout(() => {
+                input.focus();
+                input.setSelectionRange(start + emoji.length, start + emoji.length);
+            }, 0);
+        }
+        setShowEmojiPicker(false);
+    };
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && onSendMessage) {
@@ -161,12 +207,22 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                 <button
                     className="btn btn-outline-secondary emoji-btn"
                     type="button"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    title="Emoji"
+                    style={{ position: 'relative' }}
+                >
+                    <i className="bi bi-emoji-smile"></i>
+                </button>
+                <button
+                    className="btn btn-outline-secondary emoji-btn"
+                    type="button"
                     onClick={onToggleEmojiPanel}
                     title="Favorite emojis"
                 >
                     <i className="bi bi-star-fill"></i>
                 </button>
                 <input
+                    ref={inputRef}
                     type="text"
                     className="form-control"
                     placeholder="Type your message"
@@ -186,8 +242,82 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                     disabled={!onSendMessage || !hasContent}
                 >
                     Send
-                </button>
+                    </button>
             </div>
+            {showEmojiPicker && (
+                <>
+                    <div 
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            zIndex: 1198,
+                            backgroundColor: 'transparent'
+                        }}
+                        onClick={() => setShowEmojiPicker(false)}
+                    />
+                    <div style={{
+                        position: 'fixed',
+                        bottom: isMobile ? '90px' : '70px',
+                        left: isMobile ? '10px' : '438px',
+                        width: isMobile ? 'calc(100% - 20px)' : '340px',
+                        maxWidth: '340px',
+                        maxHeight: '320px',
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+                        zIndex: 1199,
+                        padding: '12px',
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(8, 1fr)',
+                        gap: '6px',
+                        boxSizing: 'border-box'
+                    }}>
+                        {commonEmojis.map((emoji, index) => (
+                            <button
+                                key={index}
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEmojiClick(emoji);
+                                }}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: '22px',
+                                    cursor: 'pointer',
+                                    padding: '6px',
+                                    borderRadius: '6px',
+                                    transition: 'all 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    minHeight: '36px',
+                                    width: '100%',
+                                    maxWidth: '100%',
+                                    boxSizing: 'border-box',
+                                    overflow: 'hidden'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#f0f0f0';
+                                    e.currentTarget.style.transform = 'scale(1.1)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                }}
+                                title={emoji}
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
         </div>
     );
 };
