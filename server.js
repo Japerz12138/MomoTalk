@@ -23,6 +23,12 @@ if (!SECRET_KEY) {
     process.exit(1);
 }
 
+// Message encryption configuration
+const MESSAGE_ENCRYPTION_KEY = process.env.MESSAGE_ENCRYPTION_KEY || SECRET_KEY.substring(0, 32).padEnd(32, '0');
+const MESSAGE_ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 16;
+const AUTH_TAG_LENGTH = 16;
+
 const ACCESS_TOKEN_EXPIRES_IN = process.env.ACCESS_TOKEN_EXPIRES_IN || '15m';
 const parsedRefreshDays = parseInt(process.env.REFRESH_TOKEN_TTL_DAYS || '7', 10);
 const REFRESH_TOKEN_TTL_DAYS = Number.isFinite(parsedRefreshDays) && parsedRefreshDays > 0 ? parsedRefreshDays : 7;
@@ -145,6 +151,73 @@ function pruneExcessSessions(userId) {
             resolve();
         });
     });
+}
+
+// Message encryption/decryption functions
+function encryptMessage(text) {
+    if (!text || text.trim().length === 0) {
+        return text; // Return empty string as-is
+    }
+
+    try {
+        const iv = crypto.randomBytes(IV_LENGTH);
+        const cipher = crypto.createCipheriv(
+            MESSAGE_ENCRYPTION_ALGORITHM,
+            Buffer.from(MESSAGE_ENCRYPTION_KEY, 'utf8'),
+            iv
+        );
+
+        let encrypted = cipher.update(text, 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        const authTag = cipher.getAuthTag();
+
+        // Format: iv:authTag:encrypted (all in hex)
+        return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+    } catch (error) {
+        console.error('Error encrypting message:', error);
+        throw new Error('Failed to encrypt message');
+    }
+}
+
+function decryptMessage(encryptedText) {
+    if (!encryptedText || encryptedText.trim().length === 0) {
+        return encryptedText; // Return empty string as-is
+    }
+
+    // Check if the text is encrypted (format: iv:authTag:encrypted)
+    // If it doesn't contain colons, it's likely plaintext
+    if (!encryptedText.includes(':')) {
+        return encryptedText; // Return as plaintext 
+    }
+
+    try {
+        const parts = encryptedText.split(':');
+        if (parts.length !== 3) {
+            // Invalid format, return as-is
+            return encryptedText;
+        }
+
+        const [ivHex, authTagHex, encrypted] = parts;
+        const iv = Buffer.from(ivHex, 'hex');
+        const authTag = Buffer.from(authTagHex, 'hex');
+
+        const decipher = crypto.createDecipheriv(
+            MESSAGE_ENCRYPTION_ALGORITHM,
+            Buffer.from(MESSAGE_ENCRYPTION_KEY, 'utf8'),
+            iv
+        );
+
+        decipher.setAuthTag(authTag);
+
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+
+        return decrypted;
+    } catch (error) {
+        console.error('Error decrypting message:', error);
+        // If decryption fails, return the encrypted text
+        return encryptedText;
+    }
 }
 
 // Middleware configuration
@@ -435,9 +508,12 @@ io.on('connection', (socket) => {
 
         // Prepare text value: use trimmed text if available, otherwise empty string (since text field is NOT NULL)
         const textValue = hasText ? text.trim() : '';
+        
+        // Encrypt the message text before storing
+        const encryptedText = hasText ? encryptMessage(textValue) : '';
 
         const query = 'INSERT INTO dms (sender_id, receiver_id, text, image_url, message_type, timestamp) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP());';
-        db.query(query, [senderId, receiverId, textValue, hasImage ? imageUrl : null, messageType], (err) => {
+        db.query(query, [senderId, receiverId, encryptedText, hasImage ? imageUrl : null, messageType], (err) => {
             if (!err) {
                 const userQuery = 'SELECT nickname, avatar FROM users WHERE id = ?';
                 db.query(userQuery, [senderId], (userErr, userResults) => {
@@ -830,7 +906,8 @@ app.get('/friends', authenticateToken, (req, res) => {
         // Add online status to each friend based on onlineUsers map
         const friendsWithStatus = results.map(friend => ({
             ...friend,
-            isOnline: onlineUsers.has(friend.id)
+            isOnline: onlineUsers.has(friend.id),
+            lastMessage: friend.lastMessage ? decryptMessage(friend.lastMessage) : null
         }));
         
         res.json(friendsWithStatus);
@@ -1423,8 +1500,11 @@ app.post('/dm/send', authenticateToken, (req, res) => {
     const { receiverId, text } = req.body;
     const senderId = req.user.userId;
 
+    // Encrypt message before storing
+    const encryptedText = text ? encryptMessage(text.trim()) : '';
+    
     const sendDMQuery = 'INSERT INTO dms (sender_id, receiver_id, text, timestamp) VALUES (?, ?, ?, UTC_TIMESTAMP())';
-    db.query(sendDMQuery, [senderId, receiverId, text], (err) => {
+    db.query(sendDMQuery, [senderId, receiverId, encryptedText], (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ message: 'DM sent' });
     });
@@ -1433,20 +1513,53 @@ app.post('/dm/send', authenticateToken, (req, res) => {
 app.get('/dm/:friendId', authenticateToken, (req, res) => {
     const friendId = req.params.friendId;
     const userId = req.user.userId;
+    const { limit = 100, before_id = null } = req.query; // Support cursor-based pagination
 
-    const getDMQuery = `
-        SELECT dms.id, dms.text, dms.image_url AS imageUrl, dms.message_type AS messageType, dms.timestamp,
-               dms.sender_id AS senderId, dms.receiver_id AS receiverId,
-               (dms.sender_id = ?) AS self -- Calculate for self directly so front-end don't have to do it
-        FROM dms
-        WHERE (dms.sender_id = ? AND dms.receiver_id = ?)
-           OR (dms.sender_id = ? AND dms.receiver_id = ?)
-        ORDER BY dms.timestamp ASC
-    `;
+    let getDMQuery;
+    let queryParams;
 
-    db.query(getDMQuery, [userId, userId, friendId, friendId, userId], (err, results) => {
+    if (before_id) {
+        // Cursor-based pagination
+        getDMQuery = `
+            SELECT dms.id, dms.text, dms.image_url AS imageUrl, dms.message_type AS messageType, dms.timestamp,
+                   dms.sender_id AS senderId, dms.receiver_id AS receiverId,
+                   (dms.sender_id = ?) AS self
+            FROM dms
+            WHERE ((dms.sender_id = ? AND dms.receiver_id = ?)
+               OR (dms.sender_id = ? AND dms.receiver_id = ?))
+               AND dms.id < ?
+            ORDER BY dms.timestamp DESC
+            LIMIT ?
+        `;
+        queryParams = [userId, userId, friendId, friendId, userId, parseInt(before_id), parseInt(limit)];
+    } else {
+        // Get latest messages
+        getDMQuery = `
+            SELECT dms.id, dms.text, dms.image_url AS imageUrl, dms.message_type AS messageType, dms.timestamp,
+                   dms.sender_id AS senderId, dms.receiver_id AS receiverId,
+                   (dms.sender_id = ?) AS self
+            FROM dms
+            WHERE (dms.sender_id = ? AND dms.receiver_id = ?)
+               OR (dms.sender_id = ? AND dms.receiver_id = ?)
+            ORDER BY dms.timestamp DESC
+            LIMIT ?
+        `;
+        queryParams = [userId, userId, friendId, friendId, userId, parseInt(limit)];
+    }
+
+    db.query(getDMQuery, queryParams, (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
+        
+        // Decrypt messages before sending to client
+        const decryptedResults = results.map(msg => ({
+            ...msg,
+            text: msg.text ? decryptMessage(msg.text) : null
+        }));
+
+        // Reverse order if using cursor pagination (to show oldest first)
+        const finalResults = before_id ? decryptedResults.reverse() : decryptedResults.reverse();
+        
+        res.json(finalResults);
     });
 });
 

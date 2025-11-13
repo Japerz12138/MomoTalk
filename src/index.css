@@ -1,6 +1,15 @@
+/* 引入自定义字体 */
+@font-face {
+  font-family: 'ResourceHanRoundedCN';
+  src: url('./fonts/ResourceHanRoundedCN-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap; /* 优化字体加载性能 */
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'ResourceHanRoundedCN', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;

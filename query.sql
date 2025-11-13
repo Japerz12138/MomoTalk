@@ -77,4 +77,12 @@ CREATE TABLE uploaded_images (
 );
 
 CREATE INDEX idx_friends_user_friend ON friends (user_id, friend_id);
-CREATE INDEX idx_dms_sender_receiver ON dms (sender_id, receiver_id, timestamp);
+
+CREATE INDEX idx_dms_sender_receiver_timestamp ON dms (sender_id, receiver_id, timestamp DESC);
+
+CREATE INDEX idx_dms_receiver_sender_timestamp ON dms (receiver_id, sender_id, timestamp DESC);
+
+CREATE INDEX idx_dms_id_timestamp ON dms (id, timestamp DESC);
+
+CREATE INDEX idx_dms_user_timestamp ON dms (sender_id, timestamp DESC);
+CREATE INDEX idx_dms_receiver_timestamp ON dms (receiver_id, timestamp DESC);
