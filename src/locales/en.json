@@ -1,0 +1,246 @@
+{
+  "login": {
+    "welcome": "Welcome Back!",
+    "username": "Enter Username",
+    "password": "Password",
+    "login": "Login",
+    "createAccount": "Create an Account!",
+    "error": "Error"
+  },
+  "userMenu": {
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "register": {
+    "title": "Register Account",
+    "username": "Username",
+    "email": "Email",
+    "nickname": "Nickname",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "captcha": "Enter Captcha",
+    "refresh": "Refresh",
+    "register": "Register",
+    "backToLogin": "Back to Login",
+    "passwordError": "Password must be at least 8 characters long and contain at least one uppercase letter.",
+    "passwordMismatch": "Passwords do not match."
+  },
+  "chat": {
+    "noMessagesYet": "No messages yet.",
+    "maybeStartWithAHi": "Maybe start with a \"Hi\"?",
+    "chatWith": "Chat with {{friendName}}",
+    "startAConversation": "Start a conversation with {{friendName}}"
+  },
+  "messageInput": {
+    "uploadImage": "Upload Image",
+    "emoji": "Emoji",
+    "favoriteEmojis": "Favorite Emojis",
+    "removeImage": "Remove Image",
+    "typeYourMessage": "Type your message...",
+    "send": "Send"
+  },
+  "emojiPanel": {
+    "favoriteEmojis": "Favorite Emojis",
+    "loading": "Loading...",
+    "noFavoriteEmojisYet": "No favorite emojis yet!",
+    "hoverTip": "Hover over chat images and click the star icon to add favorites."
+  },
+  "settings": {
+    "title": "Settings",
+    "changePassword": "Change Password",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmNewPassword": "Confirm New Password",
+    "updatePassword": "Update Password",
+    "notifications": "Notifications",
+    "notificationsUnsupported": "Notifications are not supported on this device/browser. iOS Safari and some browsers don't support web notifications.",
+    "notificationsEnabled": "Notification has been enabled!",
+    "enableMomoTalkNotifications": "Enable MomoTalk Notifications",
+    "enableNotifications": "Enable Notifications",
+    "enableNotificationsCheckSettings": "Enable Notifications (Check Settings)",
+    "notificationsDenied": "Notifications are denied. Please enable them in your browser settings.",
+    "about": "About",
+    "version": "Version: 1.2.1",
+    "welcome": "Welcome to MomoTalk! This is NYIT CSCI 621 - Programming Languages Final Project!",
+    "professor": "Professor: Khalid Mirza",
+    "github": "Github: Japerz12138",
+    "dangerZone": "Danger Zone",
+    "deleteAccountWarning": "Once you delete your account, there is no going back. Please be certain.",
+    "deleteAccount": "Delete Account",
+    "language": "Language",
+    "selectLanguage": "Select Language"
+  },
+  "deleteAccount": {
+    "warning": "SYSTEM WARNING",
+    "initiating": "Initiating this sequence will permanently purge the following data sectors!",
+    "willDelete": "This will permanently delete:",
+    "userIdentity": "User Identity Core (Account & Profile)",
+    "messageArchives": "Message Archives & Neural Threads",
+    "socialLinks": "Social Link Protocols",
+    "emojiPreferences": "Emoji Preference Matrix",
+    "sessionKeys": "Active Session Keys",
+    "confirm": "To confirm total data annihilation, proceed below.",
+    "abort": "Abort Sequence",
+    "engage": "ENGAGE DELETION",
+    "countdown": "ENGAGE COUNTDOWN ({{count}}s)"
+  },
+  "notifications": {
+    "enableTitle": "Enable Notifications",
+    "recommend": "We recommend enabling notifications to stay updated with new messages and friend requests.",
+    "dismiss": "If you dismiss this message, you can still enable it in Momotalk settings page!",
+    "enable": "Enable Notifications",
+    "noThanks": "No, Thanks"
+  },
+  "sections": {
+    "chat": "Chat",
+    "friendList": "Friend List",
+    "addFriend": "Add Friend",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "sidebar": {
+    "chats": "Chats",
+    "friends": "Friends",
+    "addFriend": "Add Friend",
+    "logout": "Logout"
+  },
+  "friendList": {
+    "search": "Search friends...",
+    "online": "{{online}}/{{total}} online",
+    "noFriends": "Time to add some friends!",
+    "noResults": "No friends found matching \"{{query}}\""
+  },
+  "messageList": {
+    "search": "Search conversations...",
+    "noMessages": "Pick a friend to talk to!",
+    "noResults": "No conversations found matching \"{{query}}\"",
+    "image": "Image",
+    "noMessagesYet": "No messages yet."
+  },
+  "addFriend": {
+    "yourMomoCode": "Momo Code",
+    "shareCode": "Share this code with friends to connect!",
+    "enterMomoCode": "Enter Momo Code...",
+    "search": "Search",
+    "invalidCode": "Please enter a valid 12-digit Momo Code",
+    "alreadyFriend": "This user is already your friend or is yourself",
+    "notFound": "User not found with this Momo Code",
+    "searchError": "Error searching for users",
+    "startFriendship": "Start a friendship!",
+    "enterCode": "Enter a 12-digit Momo Code",
+    "momoCode": "Momo Code:",
+    "addFriend": "Add"
+  },
+  "friendRequests": {
+    "noRequests": "No pending friend requests",
+    "pendingList": "Pending List"
+  },
+  "profile": {
+    "myProfile": "My Profile",
+    "noNickname": "No Nickname",
+    "noSignature": "No signature yet",
+    "changeNickname": "Change Nickname",
+    "changeSignature": "Change Signature",
+    "changeBirthday": "Change Birthday",
+    "sendMessage": "Send Message",
+    "removeFriend": "Remove Friend",
+    "editAvatar": "Edit Avatar",
+    "editSignature": "Edit Signature",
+    "editBirthday": "Edit Birthday",
+    "editNickname": "Edit Nickname",
+    "uploadAvatar": "Upload new avatar image:",
+    "uploadAvatarButton": "Upload Avatar",
+    "enterSignature": "Enter new signature:",
+    "signaturePlaceholder": "Write something about yourself...",
+    "maxCharacters": "Maximum 30 characters",
+    "selectBirthday": "Select your birthday (Month and Day):",
+    "month": "Month",
+    "day": "Day",
+    "selectMonth": "Select Month",
+    "selectDay": "Select Day",
+    "yearNotRequired": "Year is not required",
+    "clearBirthday": "Clear birthday",
+    "enterNickname": "Enter new nickname:",
+    "cancel": "Cancel",
+    "save": "Save",
+    "confirmRemove": "Confirm Remove Friend",
+    "sureRemove": "Are you sure you want to remove this friend?",
+    "remove": "Remove"
+  },
+  "months": {
+    "january": "January",
+    "february": "February",
+    "march": "March",
+    "april": "April",
+    "may": "May",
+    "june": "June",
+    "july": "July",
+    "august": "August",
+    "september": "September",
+    "october": "October",
+    "november": "November",
+    "december": "December"
+  },
+  "weekdays": {
+    "sunday": "Sunday",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday"
+  },
+  "dates": {
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
+  "toast": {
+    "success": "Success",
+    "notification": "Notification",
+    "error": "Error",
+    "justNow": "Just now",
+    "friendRequestAccepted": "Friend request accepted!",
+    "friendRequestRejected": "Friend request rejected.",
+    "friendRequestSent": "Friend request sent!",
+    "newFriendRequest": "{{username}} sent you a friend request!",
+    "requestAccepted": "Your friend request was accepted!",
+    "requestRejected": "Your friend request was rejected!",
+    "respondError": "Failed to respond to friend request.",
+    "friendRemoved": "Friend removed successfully",
+    "removeError": "Failed to remove friend.",
+    "passwordUpdated": "Password updated successfully",
+    "passwordUpdateError": "Failed to update password.",
+    "profileUpdated": "Profile updated successfully",
+    "profileUpdateError": "Failed to update profile.",
+    "dmDeleted": "DM history deleted",
+    "deleteError": "Failed to delete DM history.",
+    "imageUploadError": "Please select an image file",
+    "imageSizeError": "Image size must be less than 5MB",
+    "maxImagesError": "You can only select up to {{max}} images at a time. Please remove some images first.",
+    "uploadError": "Failed to upload image",
+    "registrationSuccess": "Registration successful! You can now log in.",
+    "emojiAddedToFavorites": "Emoji added to favorites!",
+    "emojiAlreadyInFavorites": "This emoji is already in your favorites!",
+    "failedToSaveEmojiToFavorites": "Failed to save emoji to favorites.",
+    "pleaseDropImageFilesOnly": "Please drop image files only.",
+    "failedToLoadFavoriteEmojis": "Failed to load favorite emojis.",
+    "removeEmojiConfirmation": "Are you sure you want to remove this emoji from favorites?",
+    "failedToDeleteEmoji": "Failed to delete emoji.",
+    "uploading": "Uploading...",
+    "fileTooLarge": "File is too large. Maximum size is 5MB.",
+    "invalidFileType": "Invalid file type. Please upload an image.",
+    "fileRejected": "File rejected. Please try another file."
+  },
+  "imageUpload": {
+    "dragAndDrop": "Drag and drop an image here, or click to select",
+    "maximumFileSize": "Maximum file size: 5MB",
+    "clickOrDragToChange": "Click or drag to change",
+    "dropTheImageHere": "Drop the image here"
+  },
+  "alerts": {
+    "notificationDenied": "Notification permission is denied! Please enable it by clicking the \"i\" icon on the left side of your URL bar and change the website notification setting!",
+    "notificationsUnsupported": "Notifications are not supported on this device/browser (iOS Safari doesn't support notifications)."
+  }
+}
+

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import '../custom_styles/Login_Reg.css';
@@ -12,6 +13,7 @@ function LoginForm({
                        onSwitchToRegister,
                        error,
                    }) {
+    const { t } = useTranslation();
     const [localPassword, setLocalPassword] = useState(password || '');
 
     return (
@@ -50,7 +52,7 @@ function LoginForm({
                                                         d="M424.125,372.43c0,0-34.875,58.437-145.672,55.937c17.922,25.109,122.469,87.422,233.547,30.594 C497.984,397.883,424.125,372.43,424.125,372.43z"></path>
                                                 </g>
                                             </svg>
-                                            <h4 className="text-dark mb-4">Welcome Back!</h4>
+                                            <h4 className="text-dark mb-4">{t('login.welcome')}</h4>
                                         </div>
                                         <form className="user" onSubmit={onLogin}>
                                             <div className="mb-3">
@@ -58,7 +60,7 @@ function LoginForm({
                                                     className="form-control form-control-user"
                                                     type="text"
                                                     id="username"
-                                                    placeholder="Enter Username"
+                                                    placeholder={t('login.username')}
                                                     value={username}
                                                     onChange={onUsernameChange}
                                                     required
@@ -68,7 +70,7 @@ function LoginForm({
                                                 <input
                                                     className="form-control form-control-user"
                                                     type="password"
-                                                    placeholder="Password"
+                                                    placeholder={t('login.password')}
                                                     value={password}
                                                     onChange={onPasswordChange}
                                                     required
@@ -78,7 +80,7 @@ function LoginForm({
                                                 className="btn btn-primary d-block btn-user w-100"
                                                 type="submit"
                                             >
-                                                Login
+                                                {t('login.login')}
                                             </button>
                                             <hr />
                                         </form>
@@ -94,7 +96,7 @@ function LoginForm({
                                                 className="btn btn-link small"
                                                 onClick={onSwitchToRegister}
                                             >
-                                                Create an Account!
+                                                {t('login.createAccount')}
                                             </button>
                                         </div>
                                         {error && <div

@@ -1,6 +1,8 @@
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleEmojiPanel, imageQueue = [], onAddImageToQueue, onRemoveImageFromQueue }) => {
+    const { t } = useTranslation();
     const fileInputRef = useRef(null);
     const inputRef = useRef(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -65,7 +67,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
         const remainingSlots = maxImages - currentCount;
         
         if (remainingSlots <= 0) {
-            alert(`You can only select up to ${maxImages} images at a time. Please remove some images first.`);
+            alert(t('toast.maxImagesError', { max: maxImages }));
             // Reset file input
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
@@ -77,7 +79,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
         const filesToAdd = files.slice(0, remainingSlots);
         
         if (files.length > remainingSlots) {
-            alert(`You can only add ${remainingSlots} more image(s). ${files.length - remainingSlots} image(s) were not added.`);
+            alert(t('toast.maxImagesError', { max: remainingSlots }));
         }
         
         // Reset file input
@@ -152,7 +154,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                                     justifyContent: 'center',
                                     borderRadius: '8px'
                                 }}>
-                                    <span className="text-white" style={{ fontSize: '0.75rem' }}>Uploading...</span>
+                                    <span className="text-white" style={{ fontSize: '0.75rem' }}>{t('toast.uploading')}</span>
                                 </div>
                             )}
                             <button
@@ -175,7 +177,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                                     fontSize: '0.75rem',
                                     padding: 0
                                 }}
-                                title="Remove image"
+                                title={t('messageInput.removeImage')}
                             >
                                 ×
                             </button>
@@ -196,7 +198,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                     className="btn btn-outline-secondary"
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    title="Upload image"
+                    title={t('messageInput.uploadImage')}
                     style={{
                         borderTopLeftRadius: '0.375rem',
                         borderBottomLeftRadius: '0.375rem'
@@ -208,7 +210,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                     className="btn btn-outline-secondary emoji-btn"
                     type="button"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    title="Emoji"
+                    title={t('messageInput.emoji')}
                     style={{ position: 'relative' }}
                 >
                     <i className="bi bi-emoji-smile"></i>
@@ -217,7 +219,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                     className="btn btn-outline-secondary emoji-btn"
                     type="button"
                     onClick={onToggleEmojiPanel}
-                    title="Favorite emojis"
+                    title={t('messageInput.favoriteEmojis')}
                 >
                     <i className="bi bi-star-fill"></i>
                 </button>
@@ -225,7 +227,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                     ref={inputRef}
                     type="text"
                     className="form-control"
-                    placeholder="Type your message"
+                    placeholder={t('messageInput.typeYourMessage')}
                     value={input}
                     onChange={onInputChange}
                     onKeyDown={handleKeyPress}
@@ -241,7 +243,7 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
                     }}
                     disabled={!onSendMessage || !hasContent}
                 >
-                    Send
+                    {t('messageInput.send')}
                     </button>
             </div>
             {showEmojiPicker && (

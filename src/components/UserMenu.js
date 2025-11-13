@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
+import { useTranslation } from 'react-i18next';
 
 function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMobile }) {
     const [showMenu, setShowMenu] = useState(false);
+    const { t } = useTranslation();
 
     const toggleMenu = () => {
         setShowMenu((prev) => !prev);
@@ -83,7 +85,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMob
                                     closeMenu();
                                 }}
                             >
-                                Profile
+                                {t('userMenu.profile')}
                             </a>
                         </li>
                         <li>
@@ -95,7 +97,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMob
                                     closeMenu();
                                 }}
                             >
-                                Settings
+                                {t('userMenu.settings')}
                             </a>
                         </li>
                         <li>
@@ -111,7 +113,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMob
                                     closeMenu();
                                 }}
                             >
-                                Logout
+                                {t('userMenu.logout')}
                             </a>
                         </li>
                     </ul>
@@ -196,7 +198,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMob
                                     style={{ padding: '12px 8px' }}
                                 >
                                     <i className="bi bi-person-circle me-3" style={{ fontSize: '1.3rem' }}></i>
-                                    <span style={{ fontSize: '1rem' }}>Profile</span>
+                                    <span style={{ fontSize: '1rem' }}>{t('userMenu.profile')}</span>
                                 </button>
                                 <button
                                     className="list-group-item list-group-item-action border-0 d-flex align-items-center"
@@ -207,7 +209,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMob
                                     style={{ padding: '12px 8px' }}
                                 >
                                     <i className="bi bi-gear me-3" style={{ fontSize: '1.3rem' }}></i>
-                                    <span style={{ fontSize: '1rem' }}>Settings</span>
+                                    <span style={{ fontSize: '1rem' }}>{t('userMenu.settings')}</span>
                                 </button>
                                 <button
                                     className="list-group-item list-group-item-action border-0 d-flex align-items-center text-danger"
@@ -219,7 +221,7 @@ function UserMenu({ onLogout, nickname, username, avatar, onSectionChange, isMob
                                     style={{ padding: '12px 8px' }}
                                 >
                                     <i className="bi bi-box-arrow-right me-3" style={{ fontSize: '1.3rem' }}></i>
-                                    <span style={{ fontSize: '1rem' }}>Logout</span>
+                                    <span style={{ fontSize: '1rem' }}>{t('userMenu.logout')}</span>
                                 </button>
                             </div>
                         </div>

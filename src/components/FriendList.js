@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
 
 const FriendList = ({ friends, onSelectFriend }) => {
+    const { t } = useTranslation();
     const [selectedFriendId, setSelectedFriendId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -38,7 +40,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
                     <input
                         type="text"
                         className="form-control"
-                        placeholder="Search friends..."
+                        placeholder={t('friendList.search')}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{ border: '1px solid #ced4da' }}
@@ -75,7 +77,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
                             }}
                         ></span>
                         <span>
-                            {onlineFriendsCount}/{totalFriendsCount} online
+                            {t('friendList.online', { online: onlineFriendsCount, total: totalFriendsCount })}
                         </span>
                     </div>
                 )}
@@ -153,7 +155,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
                     }}
                 >
                     <i className="bi bi-plus-circle-dotted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
-                    <div style={{ marginTop: '10px' }}>Time to add some friends!</div>
+                    <div style={{ marginTop: '10px' }}>{t('friendList.noFriends')}</div>
                 </div>
             ) : (
                 <div
@@ -167,7 +169,7 @@ const FriendList = ({ friends, onSelectFriend }) => {
                     }}
                 >
                     <i className="bi bi-search" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
-                    <div style={{ marginTop: '10px' }}>No friends found matching "{searchQuery}"</div>
+                    <div style={{ marginTop: '10px' }}>{t('friendList.noResults', { query: searchQuery })}</div>
                 </div>
             )}
             </div>

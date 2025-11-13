@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 
 function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friendsList = [], onAddFriend }) {
+    const { t } = useTranslation();
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [error, setError] = useState('');
@@ -13,7 +15,7 @@ function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friends
         const cleanQuery = query.replace(/[\s-]/g, '');
         
         if (cleanQuery.length !== 12 || !/^\d+$/.test(cleanQuery)) {
-            setError('Please enter a valid 12-digit Momo Code');
+            setError(t('addFriend.invalidCode'));
             setSearchResults([]);
             return;
         }
@@ -32,15 +34,15 @@ function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friends
             );
 
             if (filteredResults.length === 0 && response.data.length > 0) {
-                setError('This user is already your friend or is yourself');
+                setError(t('addFriend.alreadyFriend'));
             } else if (response.data.length === 0) {
-                setError('User not found with this Momo Code');
+                setError(t('addFriend.notFound'));
             }
 
             setSearchResults(filteredResults);
         } catch (error) {
             console.error('Error searching for users:', error);
-            setError('Error searching for users');
+            setError(t('addFriend.searchError'));
         }
     };
 
@@ -61,11 +63,11 @@ function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friends
             {/* Display user's own Momo Code */}
             {loggedInMomoCode && (
                 <div className="alert alert-info" style={{ marginBottom: '15px', textAlign: 'center', backgroundColor: 'rgba(255, 119, 155, 0.2)', border: '1px solid #FF95AA'}}>
-                    <strong style={{ color: 'rgba(255, 97, 126, 0.8)' }}>Your Momo Code:</strong>
+                    <strong style={{ color: 'rgba(255, 97, 126, 0.8)' }}>{t('addFriend.yourMomoCode')}</strong>
                     <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginTop: '5px', letterSpacing: '2px', color: 'rgba(255, 65, 100, 0.8)' }}>
                         {loggedInMomoCode}
                     </div>
-                    <small style={{ color: 'rgba(255, 97, 126, 0.8)' }}>Share this code with friends to connect!</small>
+                    <small style={{ color: 'rgba(255, 97, 126, 0.8)' }}>{t('addFriend.shareCode')}</small>
                 </div>
             )}
 
@@ -73,7 +75,7 @@ function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friends
                 <input
                     type="text"
                     className="form-control"
-                    placeholder="Enter Momo Code (e.g., 1234-5678-9012)"
+                    placeholder={t('addFriend.enterMomoCode')}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -89,7 +91,7 @@ function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friends
                         color: 'white',
                     }}
                 >
-                    Search
+                    {t('addFriend.search')}
                 </button>
             </div>
 
@@ -108,8 +110,8 @@ function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friends
                     }}
                 >
                     <i className="bi bi-search" style={{ fontSize: '3rem', marginBottom: '10px' }}></i>
-                    <p style={{ fontSize: '1.2rem' }}>Start a friendship!</p>
-                    <p style={{ fontSize: '0.9rem' }}>Enter a 12-digit Momo Code</p>
+                    <p style={{ fontSize: '1.2rem' }}>{t('addFriend.startFriendship')}</p>
+                    <p style={{ fontSize: '0.9rem' }}>{t('addFriend.enterCode')}</p>
                 </div>
             ) : (
                 searchResults.length > 0 && (
@@ -121,13 +123,13 @@ function SearchAndAddFriend({ token, loggedInUsername, loggedInMomoCode, friends
                             >
                                 <div>
                                     <div>{user.nickname || user.username}</div>
-                                    <small className="text-muted">Momo Code: {user.momo_code}</small>
+                                    <small className="text-muted">{t('addFriend.momoCode')} {user.momo_code}</small>
                                 </div>
                                 <button
                                     className="btn btn-sm btn-success"
                                     onClick={() => onAddFriend(user.momo_code)}
                                 >
-                                    Add Friend
+                                    {t('addFriend.addFriend')}
                                 </button>
                             </li>
                         ))}

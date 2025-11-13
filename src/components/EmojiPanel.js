@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getFullImageUrl } from '../utils/imageHelper';
+import { useTranslation } from 'react-i18next';
 
 const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
+    const { t } = useTranslation();
     const [favoriteEmojis, setFavoriteEmojis] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -27,7 +29,7 @@ const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
             setFavoriteEmojis(response.data);
         } catch (err) {
             console.error('Error fetching favorite emojis:', err);
-            setError('Failed to load favorite emojis');
+            setError(t('toast.failedToLoadFavoriteEmojis'));
         } finally {
             setLoading(false);
         }
@@ -35,7 +37,7 @@ const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
 
     const handleDeleteEmoji = async (emojiId, e) => {
         e.stopPropagation();
-        if (!window.confirm('Are you sure you want to remove this emoji from favorites?')) {
+        if (!window.confirm(t('toast.removeEmojiConfirmation'))) {
             return;
         }
 
@@ -51,7 +53,7 @@ const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
             setFavoriteEmojis(prev => prev.filter(emoji => emoji.id !== emojiId));
         } catch (err) {
             console.error('Error deleting emoji:', err);
-            alert('Failed to delete emoji');
+            alert(t('toast.failedToDeleteEmoji'));
         }
     };
 
@@ -132,7 +134,7 @@ const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
                 >
                     <h6 style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>
                         <i className="bi bi-star-fill me-2" style={{ color: '#4C5B6F' }}></i>
-                        Favorite Emojis
+                        {t('emojiPanel.favoriteEmojis')}
                     </h6>
                     <button
                         className="btn btn-sm btn-link p-0"
@@ -154,9 +156,9 @@ const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
                     {loading && (
                         <div className="text-center text-muted p-3">
                             <div className="spinner-border spinner-border-sm me-2" role="status">
-                                <span className="visually-hidden">Loading...</span>
+                                <span className="visually-hidden">{t('emojiPanel.loading')}</span>
                             </div>
-                            Loading...
+                            {t('emojiPanel.loading')}
                         </div>
                     )}
 
@@ -169,8 +171,8 @@ const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
                     {!loading && !error && favoriteEmojis.length === 0 && (
                         <div className="text-center text-muted p-3">
                             <i className="bi bi-emoji-frown" style={{ fontSize: '2rem', display: 'block', marginBottom: '8px', opacity: 0.5 }}></i>
-                            <p style={{ fontSize: '0.875rem', margin: 0 }}>No favorite emojis yet!</p>
-                            <p style={{ fontSize: '0.75rem', margin: '4px 0 0 0' }}>Hover over chat images and click the star icon to add favorites.</p>
+                            <p style={{ fontSize: '0.875rem', margin: 0 }}>{t('emojiPanel.noFavoriteEmojisYet')}</p>
+                            <p style={{ fontSize: '0.75rem', margin: '4px 0 0 0' }}>{t('emojiPanel.hoverTip')}</p>
                         </div>
                     )}
 
@@ -215,7 +217,7 @@ const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
                                         }}
                                     />
                                     <button
-                                        className="btn btn-sm"
+                                        className="btn btn-sm delete-emoji-btn"
                                         onClick={(e) => handleDeleteEmoji(emoji.id, e)}
                                         style={{
                                             position: 'absolute',
@@ -230,7 +232,6 @@ const EmojiPanel = ({ onSelectEmoji, onClose, show, isMobile = false }) => {
                                             opacity: 0,
                                             transition: 'opacity 0.2s'
                                         }}
-                                        className="delete-emoji-btn"
                                         onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                                         onMouseLeave={(e) => e.currentTarget.style.opacity = '0'}
                                     >

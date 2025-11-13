@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
 
 function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
+    const { t } = useTranslation();
     const [selectedMessageId, setSelectedMessageId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -52,7 +54,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                     <input
                         type="text"
                         className="form-control"
-                        placeholder="Search conversations..."
+                        placeholder={t('messageList.search')}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{ border: '1px solid #ced4da' }}
@@ -152,13 +154,13 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                     </span>
                                 ) : msg.imageUrl ? (
                                     // Image only
-                                    <span><i className="bi bi-image"></i> Image</span>
+                                    <span><i className="bi bi-image"></i> {t('messageList.image')}</span>
                                 ) : msg.text ? (
                                     // Text only
                                     msg.text.length > 10 ? `${msg.text.slice(0, 10)}...` : msg.text
                                 ) : (
                                     // No message
-                                    'No messages yet.'
+                                    t('messageList.noMessagesYet')
                                 )}
                             </p>
                         </div>
@@ -176,7 +178,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                     }}
                 >
                     <i className="bi bi-chat-left-dots" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
-                    <div style={{ marginTop: '10px' }}>Pick a friend to talk to!</div>
+                    <div style={{ marginTop: '10px' }}>{t('messageList.noMessages')}</div>
                 </div>
             ) : (
                 <div
@@ -190,7 +192,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                     }}
                 >
                     <i className="bi bi-search" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
-                    <div style={{ marginTop: '10px' }}>No conversations found matching "{searchQuery}"</div>
+                    <div style={{ marginTop: '10px' }}>{t('messageList.noResults', { query: searchQuery })}</div>
                 </div>
             )}
             </div>

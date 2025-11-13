@@ -1,10 +1,12 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import UserMenu from './UserMenu';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
 
 const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChange, nickname, username, avatar, isMobile, onClose, unreadMessagesCount, friendRequests }) => {
+    const { t } = useTranslation();
     // Calculate if there are unread messages
     const hasUnreadMessages = unreadMessagesCount && Object.values(unreadMessagesCount).some(count => count > 0);
     
@@ -76,7 +78,7 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                         style={{ position: 'relative' }}
                     >
                         <i className={`bi bi-chat-dots ${isMobile ? 'me-2' : ''}`} style={{ fontSize: isMobile ? '1.1rem' : '1.5rem' }}></i>
-                        {isMobile && <span>Chats</span>}
+                        {isMobile && <span>{t('sidebar.chats')}</span>}
                         {hasUnreadMessages && (
                             <span
                                 style={{
@@ -106,7 +108,7 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                         }}
                     >
                         <i className={`bi bi-people ${isMobile ? 'me-2' : ''}`} style={{ fontSize: isMobile ? '1.1rem' : '1.5rem' }}></i>
-                        {isMobile && <span>Friends</span>}
+                        {isMobile && <span>{t('sidebar.friends')}</span>}
                     </a>
                 </li>
                 <li>
@@ -120,7 +122,7 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                         style={{ position: 'relative' }}
                     >
                         <i className={`bi bi-person-plus ${isMobile ? 'me-2' : ''}`} style={{ fontSize: isMobile ? '1.1rem' : '1.5rem' }}></i>
-                        {isMobile && <span>Add Friend</span>}
+                        {isMobile && <span>{t('sidebar.addFriend')}</span>}
                         {hasPendingRequests && (
                             <span
                                 style={{
@@ -184,7 +186,7 @@ const Sidebar = ({ showMenu, toggleMenu, onLogout, activeSection, onSectionChang
                                 style={{ color: '#ff6b6b' }}
                             >
                                 <i className="bi bi-box-arrow-right me-2" style={{ fontSize: '1.1rem' }}></i>
-                                <span>Logout</span>
+                                <span>{t('sidebar.logout')}</span>
                             </a>
                         </li>
                     </ul>

@@ -1,9 +1,11 @@
 import React, { useImperativeHandle, useState, forwardRef } from "react";
 import Toast from "./Toast";
+import { useTranslation } from 'react-i18next';
 
 const ToastContainer = forwardRef((_, ref) => {
     const [toasts, setToasts] = useState([]);
-
+    const { t } = useTranslation();
+    
     useImperativeHandle(ref, () => ({
         addToast: (title, message) => {
             const id = new Date().getTime();

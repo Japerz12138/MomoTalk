@@ -1,0 +1,246 @@
+{
+  "login": {
+    "welcome": "欢迎回来！",
+    "username": "输入用户名",
+    "password": "密码",
+    "login": "登录",
+    "createAccount": "创建账户！",
+    "error": "错误"
+  },
+  "userMenu": {
+    "profile": "个人资料",
+    "settings": "设置",
+    "logout": "退出登录"
+  },
+  "register": {
+    "title": "注册账户",
+    "username": "用户名",
+    "email": "邮箱",
+    "nickname": "昵称",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "captcha": "输入验证码",
+    "refresh": "刷新",
+    "register": "注册",
+    "backToLogin": "返回登录",
+    "passwordError": "密码必须至少8个字符，且包含至少一个大写字母。",
+    "passwordMismatch": "密码不匹配。"
+  },
+  "chat": {
+    "noMessagesYet": "还没有消息。",
+    "maybeStartWithAHi": "要不要打个招呼？",
+    "chatWith": "与 {{currentChat}} 聊天",
+    "selectAConversation": "选择一个对话"
+  },
+  "messageInput": {
+    "uploadImage": "上传图片",
+    "emoji": "表情",
+    "favoriteEmojis": "收藏表情",
+    "removeImage": "移除图片",
+    "typeYourMessage": "回复...",
+    "send": "发送"
+  },
+  "emojiPanel": {
+    "favoriteEmojis": "收藏表情",
+    "loading": "加载中...",
+    "noFavoriteEmojisYet": "还没有收藏表情！",
+    "hoverTip": "将鼠标悬停在聊天图片上并点击星形图标即可收藏。"
+  },
+  "settings": {
+    "title": "设置",
+    "changePassword": "修改密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmNewPassword": "确认新密码",
+    "updatePassword": "更新密码",
+    "notifications": "通知",
+    "notificationsUnsupported": "此设备/浏览器不支持通知。iOS Safari 和一些浏览器不支持网页通知。",
+    "notificationsEnabled": "通知已启用！",
+    "enableMomoTalkNotifications": "启用 MomoTalk 通知",
+    "enableNotifications": "启用通知",
+    "enableNotificationsCheckSettings": "启用通知（检查设置）",
+    "notificationsDenied": "通知已被拒绝。请在浏览器设置中启用。",
+    "about": "关于",
+    "version": "版本: 1.2.1",
+    "welcome": "欢迎使用 MomoTalk 桃信！这是纽约理工学院 CSCI 621 - 编程语言 期末项目的后续开发！",
+    "professor": "教授: Khalid Mirza",
+    "github": "Github: Japerz12138",
+    "dangerZone": "超·危险区域！",
+    "deleteAccountWarning": "一旦删除账户，将无法恢复。请确认。",
+    "deleteAccount": "删除账户",
+    "language": "语言",
+    "selectLanguage": "选择语言"
+  },
+  "deleteAccount": {
+    "warning": "系统警告",
+    "initiating": "启动此序列将永久清除以下数据扇区！",
+    "willDelete": "以下资料将永久删除：",
+    "userIdentity": "用户身份核心（账户和资料）",
+    "messageArchives": "消息存档和神经线程",
+    "socialLinks": "社交链接协议",
+    "emojiPreferences": "表情偏好矩阵",
+    "sessionKeys": "活动会话密钥",
+    "confirm": "要确认完全数据清除，请继续。",
+    "abort": "中止序列",
+    "engage": "执行删除",
+    "countdown": "执行倒计时 ({{count}}秒)"
+  },
+  "notifications": {
+    "enableTitle": "启用通知",
+    "recommend": "我们建议启用通知以接收新消息和好友请求的更新。",
+    "dismiss": "如果您关闭此消息，仍可在 Momotalk 设置页面中启用！",
+    "enable": "启用通知",
+    "noThanks": "不了，谢谢"
+  },
+  "sections": {
+    "chat": "聊天",
+    "friendList": "好友列表",
+    "addFriend": "添加好友",
+    "profile": "个人资料",
+    "settings": "设置"
+  },
+  "sidebar": {
+    "chats": "聊天",
+    "friends": "好友",
+    "addFriend": "添加好友",
+    "logout": "退出登录"
+  },
+  "friendList": {
+    "search": "搜索好友...",
+    "online": "{{online}}/{{total}} 在线",
+    "noFriends": "没好友耶...",
+    "noResults": "未找到匹配 \"{{query}}\" 的好友"
+  },
+  "messageList": {
+    "search": "搜索对话...",
+    "noMessages": "选择一个好友开始聊天！",
+    "noResults": "未找到匹配 \"{{query}}\" 的对话",
+    "image": "图片",
+    "noMessagesYet": "还没有消息。"
+  },
+  "addFriend": {
+    "yourMomoCode": "Momo Code",
+    "shareCode": "与他人分享此代码来添加好友！",
+    "enterMomoCode": "查询 Momo Code...",
+    "search": "搜索",
+    "invalidCode": "请输入有效的12位 Momo Code",
+    "alreadyFriend": "该用户已经是您的好友或就是您自己",
+    "notFound": "未找到使用此 Momo Code 的用户",
+    "searchError": "搜索用户时出错",
+    "startFriendship": "搜索一位老师",
+    "enterCode": "输入 12 位 Momo Code",
+    "momoCode": "Momo Code:",
+    "addFriend": "添加"
+  },
+  "friendRequests": {
+    "noRequests": "没有待处理的好友请求",
+    "pendingList": "待处理列表"
+  },
+  "profile": {
+    "myProfile": "我的资料",
+    "noNickname": "无昵称",
+    "noSignature": "还没有个性签名",
+    "changeNickname": "修改昵称",
+    "changeSignature": "修改个性签名",
+    "changeBirthday": "修改生日",
+    "sendMessage": "发送消息",
+    "removeFriend": "移除好友",
+    "editAvatar": "编辑头像",
+    "editSignature": "编辑个性签名",
+    "editBirthday": "编辑生日",
+    "editNickname": "编辑昵称",
+    "uploadAvatar": "上传新头像：",
+    "uploadAvatarButton": "上传头像",
+    "enterSignature": "输入新个性签名：",
+    "signaturePlaceholder": "写一些关于自己的内容...",
+    "maxCharacters": "最多30个字符",
+    "selectBirthday": "选择您的生日（月和日）：",
+    "month": "月",
+    "day": "日",
+    "selectMonth": "选择月份",
+    "selectDay": "选择日期",
+    "yearNotRequired": "不需要年份",
+    "clearBirthday": "清除生日",
+    "enterNickname": "输入新昵称：",
+    "cancel": "取消",
+    "save": "保存",
+    "confirmRemove": "确认移除好友",
+    "sureRemove": "您确定要移除此好友吗？",
+    "remove": "移除"
+  },
+  "months": {
+    "january": "1月",
+    "february": "2月",
+    "march": "3月",
+    "april": "4月",
+    "may": "5月",
+    "june": "6月",
+    "july": "7月",
+    "august": "8月",
+    "september": "9月",
+    "october": "10月",
+    "november": "11月",
+    "december": "12月"
+  },
+  "weekdays": {
+    "sunday": "星期日",
+    "monday": "星期一",
+    "tuesday": "星期二",
+    "wednesday": "星期三",
+    "thursday": "星期四",
+    "friday": "星期五",
+    "saturday": "星期六"
+  },
+  "dates": {
+    "today": "今天",
+    "yesterday": "昨天"
+  },
+  "toast": {
+    "success": "成功",
+    "notification": "通知",
+    "error": "错误",
+    "justNow": "刚刚",
+    "friendRequestAccepted": "好友请求已接受！",
+    "friendRequestRejected": "好友请求已拒绝。",
+    "friendRequestSent": "好友请求已发送！",
+    "newFriendRequest": "{{username}} 向您发送了好友请求！",
+    "requestAccepted": "您的好友请求已被接受！",
+    "requestRejected": "您的好友请求已被拒绝！",
+    "respondError": "处理好友请求失败。",
+    "friendRemoved": "好友移除成功",
+    "removeError": "移除好友失败。",
+    "passwordUpdated": "密码更新成功",
+    "passwordUpdateError": "更新密码失败。",
+    "profileUpdated": "资料更新成功",
+    "profileUpdateError": "更新资料失败。",
+    "dmDeleted": "私信历史已删除",
+    "deleteError": "删除私信历史失败。",
+    "imageUploadError": "请选择图片文件",
+    "imageSizeError": "图片大小必须小于5MB",
+    "maxImagesError": "您一次最多只能选择 {{max}} 张图片。请先移除一些图片。",
+    "uploadError": "上传图片失败",
+    "registrationSuccess": "注册成功！您现在可以登录了。",
+    "emojiAddedToFavorites": "表情已添加到收藏夹！",
+    "emojiAlreadyInFavorites": "该表情已收藏！",
+    "failedToSaveEmojiToFavorites": "保存表情到收藏夹失败。",
+    "pleaseDropImageFilesOnly": "只接受图片文件。",
+    "failedToLoadFavoriteEmojis": "加载收藏表情失败。",
+    "removeEmojiConfirmation": "您确定要移除此表情吗？",
+    "failedToDeleteEmoji": "删除表情失败。",
+    "uploading": "上传中...",
+    "fileTooLarge": "文件太大了。最大大小为 5MB。",
+    "invalidFileType": "无效的文件类型。请上传图片。",
+    "fileRejected": "文件被拒绝。请尝试另一个文件。"
+  },
+  "imageUpload": {
+    "dragAndDrop": "拖放图片到这里，或点击选择",
+    "maximumFileSize": "最大文件大小: 5MB",
+    "clickOrDragToChange": "点击或拖动来变更",
+    "dropTheImageHere": "拖放图片到这里"
+  },
+  "alerts": {
+    "notificationDenied": "通知权限已被拒绝！请点击 URL 栏左侧的 \"i\" 图标并更改网站通知设置来启用！",
+    "notificationsUnsupported": "此设备/浏览器不支持通知（iOS Safari 不支持通知）。"
+  }
+}
+

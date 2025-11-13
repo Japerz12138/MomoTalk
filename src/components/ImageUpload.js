@@ -1,7 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { useTranslation } from 'react-i18next';
 
 const ImageUpload = ({ onUpload, buttonText = "Upload Image", accept = "image/*", maxSize = 5 * 1024 * 1024 }) => {
+    const { t } = useTranslation();
     const [preview, setPreview] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState(null);
@@ -13,11 +15,11 @@ const ImageUpload = ({ onUpload, buttonText = "Upload Image", accept = "image/*"
         if (rejectedFiles.length > 0) {
             const rejection = rejectedFiles[0];
             if (rejection.errors.some(e => e.code === 'file-too-large')) {
-                setError('File is too large. Maximum size is 5MB.');
+                setError(t('toast.fileTooLarge'));
             } else if (rejection.errors.some(e => e.code === 'file-invalid-type')) {
-                setError('Invalid file type. Please upload an image.');
+                setError(t('toast.invalidFileType'));
             } else {
-                setError('File rejected. Please try another file.');
+                setError(t('toast.fileRejected'));
             }
             return;
         }
@@ -75,9 +77,9 @@ const ImageUpload = ({ onUpload, buttonText = "Upload Image", accept = "image/*"
                 {uploading ? (
                     <div>
                         <div className="spinner-border text-primary" role="status">
-                            <span className="visually-hidden">Uploading...</span>
+                            <span className="visually-hidden">{t('toast.uploading')}</span>
                         </div>
-                        <p className="mt-2">Uploading...</p>
+                        <p className="mt-2">{t('toast.uploading')}</p>
                     </div>
                 ) : preview ? (
                     <div>
@@ -91,17 +93,17 @@ const ImageUpload = ({ onUpload, buttonText = "Upload Image", accept = "image/*"
                                 marginBottom: '10px'
                             }} 
                         />
-                        <p className="text-muted">Click or drag to change</p>
+                        <p className="text-muted">{t('imageUpload.clickOrDragToChange')}</p>
                     </div>
                 ) : (
                     <div>
                         <i className="bi bi-cloud-upload" style={{ fontSize: '48px', color: '#6c757d' }}></i>
                         {isDragActive ? (
-                            <p className="mt-2">Drop the image here</p>
+                            <p className="mt-2">{t('imageUpload.dropTheImageHere')}</p>
                         ) : (
                             <p className="mt-2">
-                                Drag & drop an image here, or click to select<br />
-                                <small className="text-muted">Maximum file size: 5MB</small>
+                                {t('imageUpload.dragAndDrop')}
+                                <small className="text-muted">{t('imageUpload.maximumFileSize')}</small>
                             </p>
                         )}
                     </div>

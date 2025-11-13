@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import MessageList from './components/MessageList';
@@ -28,6 +29,7 @@ const socket = io(process.env.REACT_APP_SERVER_DOMAIN, {
 });
 
 function App() {
+    const { t, i18n } = useTranslation();
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [username, setUsername] = useState('');
@@ -438,17 +440,17 @@ function App() {
     useEffect(() => {
         // Use socket (global) since user joins room via socket
         socket.on('receive_friend_request', ({ senderId, senderUsername }) => {
-            handleShowToast("New Friend!?", `${senderUsername} sent you a friend request!`);
+            handleShowToast(t('toast.notification'), t('toast.newFriendRequest', { username: senderUsername }));
             fetchFriendRequests();
             fetchFriends();
         });
 
         socket.on('friend_request_responded', ({ receiverId, action }) => {
             if (action === 'accept') {
-                handleShowToast("Yay!", "Your friend request was accepted!");
+                handleShowToast(t('toast.success'), t('toast.requestAccepted'));
                 fetchFriends();
             } else if (action === 'reject') {
-                handleShowToast(":(", "Your friend request was rejected!");
+                handleShowToast(t('toast.notification'), t('toast.requestRejected'));
             }
         });
 
@@ -719,7 +721,7 @@ function App() {
                 password: newPassword,
                 nickname,
             });
-            alert('Registration successful! You can now log in.');
+            alert(t('toast.registrationSuccess'));
             setShowRegister(false);
             handleRegFormReset();
         } catch (error) {
@@ -733,7 +735,7 @@ function App() {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
-            handleShowToast("Success", "Friend request sent!");
+            handleShowToast(t('toast.success'), t('toast.friendRequestSent'));
             fetchFriends();
 
             // Notify the friend
@@ -745,7 +747,7 @@ function App() {
             });
         } catch (error) {
             console.error('Error adding friend:', error.response?.data?.error || error);
-            handleShowToast("Error", error.response?.data?.error || "Failed to add friend");
+            handleShowToast(t('toast.error'), error.response?.data?.error || t('toast.respondError'));
         }
     };
 
@@ -754,7 +756,7 @@ function App() {
             await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/friend/accept`, { friendId }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            alert('Friend request accepted');
+            alert(t('toast.friendRequestAccepted'));
             fetchFriends();
         } catch (error) {
             console.error('Error accepting friend:', error);
@@ -771,8 +773,8 @@ function App() {
             );
 
             handleShowToast(
-                action === 'accept' ? 'Success' : 'Notification',
-                action === 'accept' ? 'Friend request accepted!' : 'Friend request rejected.'
+                action === 'accept' ? t('toast.success') : t('toast.notification'),
+                action === 'accept' ? t('toast.friendRequestAccepted') : t('toast.friendRequestRejected')
             );
 
             // Backend already sends socket events, so we don't need to emit here
@@ -782,7 +784,7 @@ function App() {
                 fetchFriends();
             }
         } catch (error) {
-            handleShowToast("Error", "Failed to respond to friend request.");
+            handleShowToast(t('toast.error'), t('toast.respondError'));
         }
     };
 
@@ -862,13 +864,13 @@ function App() {
 
         // Check file type
         if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
+            alert(t('toast.imageUploadError'));
             return;
         }
 
         // Check file size (5MB max)
         if (file.size > 5 * 1024 * 1024) {
-            alert('Image size must be less than 5MB');
+            alert(t('toast.imageSizeError'));
             return;
         }
 
@@ -880,7 +882,7 @@ function App() {
             const maxImages = 10;
             setImageQueue(prev => {
                 if (prev.length >= maxImages) {
-                    alert(`You can only select up to ${maxImages} images at a time. Please remove some images first.`);
+                    alert(t('toast.maxImagesError', { max: maxImages }));
                     return prev;
                 }
                 return [...prev, {
@@ -916,7 +918,7 @@ function App() {
             }
         } catch (error) {
             console.error('Error uploading image:', error);
-            alert(error.response?.data?.error || 'Failed to upload image');
+            alert(error.response?.data?.error || t('toast.uploadError'));
             // Remove failed item from queue
             setImageQueue(prev => prev.filter(item => item.id !== imageId));
         }
@@ -1125,7 +1127,7 @@ function App() {
                     { friendId: selectedFriend.id },
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
-                alert('DM history deleted');
+                alert(t('toast.dmDeleted'));
                 setDms([]);
             } catch (error) {
                 console.error('Error deleting DM history:', error);
@@ -1216,11 +1218,11 @@ function App() {
         if (!badge) return;
 
         const sectionNames = {
-            'chat': 'Chat',
-            'friend-list': 'Friend List',
-            'add-friend': 'Add Friend',
-            'profile': 'Profile',
-            'settings': 'Settings'
+            'chat': t('sections.chat'),
+            'friend-list': t('sections.friendList'),
+            'add-friend': t('sections.addFriend'),
+            'profile': t('sections.profile'),
+            'settings': t('sections.settings')
         };
 
         const displayName = sectionNames[section];
@@ -1232,7 +1234,7 @@ function App() {
         }
     };
 
-    // Update badge when section changes
+    // Update badge when section changes or language changes
     useEffect(() => {
         if (token) {
             updateHeaderBadge(activeSection);
@@ -1243,7 +1245,7 @@ function App() {
                 badge.style.display = 'none';
             }
         }
-    }, [activeSection, token]);
+    }, [activeSection, token, i18n.language]);
 
     //IF ADD NAVIGATION ITEM, CHANGE THIS AS WELL!
     const handleSectionChange = (section) => {
@@ -1270,19 +1272,19 @@ function App() {
                     <div className="modal-dialog">
                         <div className="modal-content">
                             <div className="modal-header">
-                                <h5 className="modal-title">Enable Notifications</h5>
+                                <h5 className="modal-title">{t('notifications.enableTitle')}</h5>
                                 <button type="button" className="btn-close" onClick={handleDismissNotification}></button>
                             </div>
                             <div className="modal-body">
-                                <p>We recommend enabling notifications to stay updated with new messages and friend requests.</p>
-                                <p>If you dismiss this message, you can still enable it in Momotalk settings page!</p>
+                                <p>{t('notifications.recommend')}</p>
+                                <p>{t('notifications.dismiss')}</p>
                             </div>
                             <div className="modal-footer">
                                 <button className="btn btn-primary" onClick={handleRequestNotificationPermission}>
-                                    Enable Notifications
+                                    {t('notifications.enable')}
                                 </button>
                                 <button className="btn btn-secondary" onClick={handleDismissNotification}>
-                                    No, Thanks
+                                    {t('notifications.noThanks')}
                                 </button>
                             </div>
                         </div>

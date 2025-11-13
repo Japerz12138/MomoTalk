@@ -1,12 +1,34 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useTranslation } from "react-i18next";
 
 const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMode, onToggleAutoMode, onDeleteAccount }) => {
+    const { t, i18n } = useTranslation();
     const [oldPassword, setOldPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [countdown, setCountdown] = useState(10);
+    const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+    const languageDropdownRef = useRef(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (languageDropdownRef.current && !languageDropdownRef.current.contains(event.target)) {
+                setShowLanguageDropdown(false);
+            }
+        };
+
+        if (showLanguageDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showLanguageDropdown]);
+
     // Check if Notification API is supported before accessing it (iOS Safari doesn't support it)
     const [notificationPermission, setNotificationPermission] = useState(
         ('Notification' in window) ? Notification.permission : 'unsupported'
@@ -39,14 +61,12 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
     const requestNotificationPermission = () => {
         // Check if Notification API is supported
         if (!('Notification' in window)) {
-            alert("Notifications are not supported on this device/browser (iOS Safari doesn't support notifications).");
+            alert(t('alerts.notificationsUnsupported'));
             return;
         }
         
         if (notificationPermission === "denied") {
-            alert(
-                "Notification permission is denied! Please enable it by clicking the \"i\" icon on the left side of your URL bar and change the website notification setting!"
-            );
+            alert(t('alerts.notificationDenied'));
         } else {
             Notification.requestPermission().then((permission) => {
                 setNotificationPermission(permission);
@@ -85,14 +105,88 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
 
     return (
         <div className="container mt-5" style={{ overflowY: "auto" }}>
-            <h1 className="mb-4" style={{ marginTop: "30px" }}>Settings</h1>
+            <h1 className="mb-4" style={{ marginTop: "30px" }}>{t('settings.title')}</h1>
+
+            {/* Language Selection */}
+            <div className="card mb-4">
+                <div className="card-body">
+                    <h5 className="card-title">{t('settings.language')}</h5>
+                    <div className="mb-3">
+                        <label className="form-label">{t('settings.selectLanguage')}</label>
+                        <div className="dropdown" ref={languageDropdownRef}>
+                            <button
+                                className="btn btn-outline-secondary dropdown-toggle"
+                                type="button"
+                                id="languageDropdown"
+                                aria-expanded={showLanguageDropdown}
+                                onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                                style={{
+                                    color: '#4C5B6F',
+                                    borderColor: '#4C5B6F'
+                                }}
+                            >
+                                {i18n.language === 'zh-CN' ? '简体中文' : 'English'}
+                            </button>
+                            <style>{`
+                                #languageDropdown::after {
+                                    border-top-color: #4C5B6F !important;
+                                    color: white !important;
+                                }
+                                #languageDropdown:hover {
+                                    color: #4C5B6F !important;
+                                    border-color: #4C5B6F !important;
+                                }
+                                #languageDropdown:hover::after {
+                                    border-top-color: #4C5B6F !important;
+                                }
+                                #languageDropdown ~ .dropdown-menu .dropdown-item.active {
+                                    background-color: #4C5B6F !important;
+                                    color: white !important;
+                                }
+                                #languageDropdown ~ .dropdown-menu .dropdown-item:hover {
+                                    background-color: rgba(76, 91, 111, 0.8) !important;
+                                    color: white !important;
+                                }
+                            `}</style>
+                            <ul className={`dropdown-menu ${showLanguageDropdown ? 'show' : ''}`} aria-labelledby="languageDropdown">
+                                <li>
+                                    <a
+                                        className={`dropdown-item ${i18n.language === 'en' ? 'active' : ''}`}
+                                        href="#"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            i18n.changeLanguage('en');
+                                            setShowLanguageDropdown(false);
+                                        }}
+                                    >
+                                        English
+                                    </a>
+                                </li>
+                                <li>
+                                    <a
+                                        className={`dropdown-item ${i18n.language === 'zh-CN' ? 'active' : ''}`}
+                                        href="#"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            i18n.changeLanguage('zh-CN');
+                                            setShowLanguageDropdown(false);
+                                        }}
+                                    >
+                                        简体中文
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {/* Change Password Section */}
             <div className="card mb-4">
                 <div className="card-body">
-                    <h5 className="card-title">Change Password</h5>
+                    <h5 className="card-title">{t('settings.changePassword')}</h5>
                     <div className="mb-3">
-                        <label className="form-label">Current Password</label>
+                        <label className="form-label">{t('settings.currentPassword')}</label>
                         <input
                             type="password"
                             className="form-control"
@@ -101,7 +195,7 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
                         />
                     </div>
                     <div className="mb-3">
-                        <label className="form-label">New Password</label>
+                        <label className="form-label">{t('settings.newPassword')}</label>
                         <input
                             type="password"
                             className="form-control"
@@ -110,7 +204,7 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
                         />
                     </div>
                     <div className="mb-3">
-                        <label className="form-label">Confirm New Password</label>
+                        <label className="form-label">{t('settings.confirmNewPassword')}</label>
                         <input
                             type="password"
                             className="form-control"
@@ -119,7 +213,7 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
                         />
                     </div>
                     <button className="btn btn-primary" onClick={handlePasswordUpdate}>
-                        Update Password
+                        {t('settings.updatePassword')}
                     </button>
                 </div>
             </div>
@@ -154,17 +248,17 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
             {/* Notifications Section */}
             <div className="card mb-4">
                 <div className="card-body">
-                    <h5 className="card-title">Notifications</h5>
+                    <h5 className="card-title">{t('settings.notifications')}</h5>
                     {notificationPermission === "unsupported" ? (
                         <div className="alert alert-info d-flex align-items-center" role="alert">
                             <div>
-                                Notifications are not supported on this device/browser. iOS Safari and some browsers don't support web notifications.
+                                {t('settings.notificationsUnsupported')}
                             </div>
                         </div>
                     ) : notificationPermission === "granted" ? (
                         <>
                             <div className="alert alert-success d-flex align-items-center" role="alert">
-                                <div>Notification has been enabled!</div>
+                                <div>{t('settings.notificationsEnabled')}</div>
                             </div>
                             <div className="form-check form-switch mt-3">
                                 <input
@@ -175,7 +269,7 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
                                     onChange={toggleInternalNotification}
                                 />
                                 <label className="form-check-label" htmlFor="internalNotificationSwitch">
-                                    Enable MomoTalk Notifications
+                                    {t('settings.enableMomoTalkNotifications')}
                                 </label>
                             </div>
                         </>
@@ -185,14 +279,14 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
                             onClick={requestNotificationPermission}
                         >
                             {notificationPermission === "denied"
-                                ? "Enable Notifications (Check Settings)"
-                                : "Enable Notifications"}
+                                ? t('settings.enableNotificationsCheckSettings')
+                                : t('settings.enableNotifications')}
                         </button>
                     )}
                     {notificationPermission === "denied" && (
                         <div className="alert alert-warning d-flex align-items-center mt-3" role="alert">
                             <div>
-                                Notifications are denied. Please enable them in your browser settings.
+                                {t('settings.notificationsDenied')}
                             </div>
                         </div>
                     )}
@@ -202,11 +296,11 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
             {/* About Section */}
             <div className="card mb-4">
                 <div className="card-body">
-                    <h5 className="card-title">About</h5>
-                    <p>Version: 1.2.0</p>
-                    <p>Welcome to MomoTalk! This is CSCI 621 - Programming Languages Final Project!</p>
-                    <p>Professor: Khalid Mirza</p>
-                    <p>Github: Japerz12138</p>
+                    <h5 className="card-title">{t('settings.about')}</h5>
+                    <p>{t('settings.version')}</p>
+                    <p>{t('settings.welcome')}</p>
+                    <p>{t('settings.professor')}</p>
+                    <p>{t('settings.github')}</p>
                     <a href="https://github.com/Japerz12138/momotalk_v2">https://github.com/Japerz12138/momotalk_v2</a>
                 </div>
             </div>
@@ -214,13 +308,13 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
             {/* Delete Account Section */}
             <div className="card border-danger">
                 <div className="card-body">
-                    <h5 className="card-title text-danger">Danger Zone</h5>
-                    <p className="text-muted">Once you delete your account, there is no going back. Please be certain.</p>
+                    <h5 className="card-title text-danger">{t('settings.dangerZone')}</h5>
+                    <p className="text-muted">{t('settings.deleteAccountWarning')}</p>
                     <button 
                         className="btn btn-danger" 
                         onClick={() => setShowDeleteModal(true)}
                     >
-                        Delete Account
+                        {t('settings.deleteAccount')}
                     </button>
                 </div>
             </div>
@@ -244,6 +338,7 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
 
 // Delete Account Confirmation Modal Component
 const DeleteAccountModal = ({ show, onClose, onConfirm, countdown, setCountdown }) => {
+    const { t } = useTranslation();
     useEffect(() => {
         if (show) {
             // Reset countdown when modal opens
@@ -280,7 +375,7 @@ const DeleteAccountModal = ({ show, onClose, onConfirm, countdown, setCountdown 
                 <div className="modal-content">
                     <div className="modal-header border-danger">
                         <h5 className="modal-title text-danger">
-                            <i className="bi bi-exclamation-triangle-fill"></i> SYSTEM WARNING
+                            <i className="bi bi-exclamation-triangle-fill"></i> {t('deleteAccount.warning')}
                         </h5>
                         <button
                             type="button"
@@ -289,16 +384,16 @@ const DeleteAccountModal = ({ show, onClose, onConfirm, countdown, setCountdown 
                         ></button>
                     </div>
                     <div className="modal-body">
-                        <p className="text-danger fw-bold">Initiating this sequence will permanently purge the following data sectors!</p>
-                        <p>This will permanently delete:</p>
+                        <p className="text-danger fw-bold">{t('deleteAccount.initiating')}</p>
+                        <p>{t('deleteAccount.willDelete')}</p>
                         <ul>
-                            <li>User Identity Core (Account & Profile)</li>
-                            <li>Message Archives & Neural Threads</li>
-                            <li>Social Link Protocols</li>
-                            <li>Emoji Preference Matrix</li>
-                            <li>Active Session Keys</li>
+                            <li>{t('deleteAccount.userIdentity')}</li>
+                            <li>{t('deleteAccount.messageArchives')}</li>
+                            <li>{t('deleteAccount.socialLinks')}</li>
+                            <li>{t('deleteAccount.emojiPreferences')}</li>
+                            <li>{t('deleteAccount.sessionKeys')}</li>
                         </ul>
-                        <p className="text-muted">To confirm total data annihilation, proceed below.</p>
+                        <p className="text-muted">{t('deleteAccount.confirm')}</p>
                     </div>
                     <div className="modal-footer">
                         <button
@@ -306,7 +401,7 @@ const DeleteAccountModal = ({ show, onClose, onConfirm, countdown, setCountdown 
                             className="btn btn-secondary"
                             onClick={onClose}
                         >
-                            Abort Sequence
+                            {t('deleteAccount.abort')}
                         </button>
                         <button
                             type="button"
@@ -314,7 +409,7 @@ const DeleteAccountModal = ({ show, onClose, onConfirm, countdown, setCountdown 
                             onClick={handleConfirm}
                             disabled={countdown > 0}
                         >
-                            {countdown > 0 ? `ENGAGE COUNTDOWN (${countdown}s)` : 'ENGAGE DELETION'}
+                            {countdown > 0 ? t('deleteAccount.countdown', { count: countdown }) : t('deleteAccount.engage')}
                         </button>
                     </div>
                 </div>

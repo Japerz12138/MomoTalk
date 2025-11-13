@@ -3,10 +3,12 @@ import axios from 'axios';
 import { DEFAULT_AVATAR } from '../constants';
 import MessageInput from './MessageInput';
 import { getFullImageUrl } from '../utils/imageHelper';
+import { useTranslation } from 'react-i18next';
 
 const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue }) => {
     const chatEndRef = useRef(null);
     const chatContainerRef = useRef(null);
+    const { t } = useTranslation();
     const [hoveredMessageIndex, setHoveredMessageIndex] = useState(null);
     const [hoveredImageIndex, setHoveredImageIndex] = useState(null);
     const [fullImageView, setFullImageView] = useState(null);
@@ -97,13 +99,13 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
         const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const diffDays = Math.floor((today - messageDate) / (1000 * 60 * 60 * 24));
         
-        const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const weekdays = [t('weekdays.sunday'), t('weekdays.monday'), t('weekdays.tuesday'), t('weekdays.wednesday'), t('weekdays.thursday'), t('weekdays.friday'), t('weekdays.saturday')];
         const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
         
         if (diffDays === 0) {
-            return 'Today ' + time;
+            return t('dates.today') + ' ' + time;
         } else if (diffDays === 1) {
-            return 'Yesterday ' + time;
+            return t('dates.yesterday') + ' ' + time;
         } else if (diffDays < 7) {
             return weekdays[date.getDay()] + ' ' + time;
         } else {
@@ -132,13 +134,13 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                     headers: { Authorization: `Bearer ${token}` }
                 }
             );
-            alert('Emoji added to favorites!');
+            alert(t('toast.emojiAddedToFavorites'));
         } catch (err) {
             console.error('Error saving emoji:', err);
             if (err.response?.status === 409) {
-                alert('This emoji is already in your favorites!');
+                alert(t('toast.emojiAlreadyInFavorites'));
             } else {
-                alert('Failed to save emoji to favorites');
+                alert(t('toast.failedToSaveEmojiToFavorites'));
             }
         } finally {
             setSavingEmoji(false);
@@ -185,7 +187,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             const imageFiles = files.filter(file => file.type.startsWith('image/'));
             
             if (imageFiles.length === 0) {
-                alert('Please drop image files only');
+                alert(t('toast.pleaseDropImageFilesOnly'));
                 return;
             }
             
@@ -242,7 +244,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                 </div>
             )}
             {!isMobile && (
-                <h5 className="text-center text-muted mb-3">{'Chat with ' + currentChat || 'Select a conversation'}</h5>
+                <h5 className="text-center text-muted mb-3">{t('chat.chatWith', { currentChat: currentChat || t('chat.selectAConversation') })}</h5>
             )}
             {messages.length > 0 ? (
                 messages.map((message, index) => {
@@ -396,7 +398,8 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             ) : (
                 <div className="text-center d-flex flex-column align-items-center">
                     <i className="bi bi-chat-left-heart mb-3" style={{ fontSize: '3rem', color: '#6c757d' }}></i>
-                    <div className="text-muted">No messages yet. Maybe start with a "Hi"?</div>
+                    <div className="text-muted">{t('chat.noMessagesYet')}</div>
+                    <div className="text-muted">{t('chat.maybeStartWithAHi')}</div>
                 </div>
             )}
 
@@ -438,14 +441,14 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                         fontWeight: 'bold',
                         marginBottom: '10px'
                     }}>
-                        Drop image here to add to queue
+                        {t('imageUpload.dropTheImageHere')}
                     </div>
                     <div style={{ 
                         color: '#FF6B9D', 
                         fontSize: '1.1rem',
                         fontWeight: '500'
                     }}>
-                        Maximum size: 5MB
+                        {t('imageUpload.maximumFileSize')}
                     </div>
                 </div>
             )}

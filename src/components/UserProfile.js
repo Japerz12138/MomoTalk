@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import '../custom_styles/UserProfile.css';
 import { DEFAULT_AVATAR } from '../constants';
@@ -6,6 +7,7 @@ import ImageUpload from './ImageUpload';
 import { getFullImageUrl } from '../utils/imageHelper';
 
 const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpdateProfile, onClose, isMobile }) => {
+    const { t, i18n } = useTranslation();
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState('');
     const [newInput, setNewInput] = useState('');
@@ -92,10 +94,16 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
     const formatBirthday = (birthday) => {
         if (!birthday) return null;
         const [month, day] = birthday.split('-');
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                           'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthNames = [
+            t('months.january'), t('months.february'), t('months.march'), t('months.april'),
+            t('months.may'), t('months.june'), t('months.july'), t('months.august'),
+            t('months.september'), t('months.october'), t('months.november'), t('months.december')
+        ];
         const monthName = monthNames[parseInt(month) - 1];
-        return `${monthName} ${parseInt(day)}`;
+        const dayNum = parseInt(day);
+        // Add "日" for Chinese, nothing for English
+        const daySuffix = i18n.language === 'zh-CN' ? '日' : '';
+        return `${monthName} ${dayNum}${daySuffix}`;
     };
 
     return (
@@ -120,7 +128,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                         <i className="bi bi-arrow-left"></i>
                     </button>
                     <h6 className="mb-0" style={{ fontSize: '1.25rem', lineHeight: 1 }}>
-                        {isOwnProfile ? 'My Profile' : user.nickname || user.username}
+                        {isOwnProfile ? t('profile.myProfile') : user.nickname || user.username}
                     </h6>
                 </div>
             )}
@@ -168,7 +176,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                     <h5 className="card-title">
                         {user.nickname && user.nickname.trim() !== ""
                             ? user.nickname
-                            : user.username || "No Nickname"}
+                            : user.username || t('profile.noNickname')}
                     </h5>
                     {isOwnProfile && (
                         <p className="text-muted">
@@ -176,7 +184,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                         </p>
                     )}
                     <p className="text-muted" style={{ fontSize: '0.95rem', marginTop: isOwnProfile ? '5px' : '10px' }}>
-                        {user.signature || (isOwnProfile ? 'No signature yet' : '')}
+                        {user.signature || (isOwnProfile ? t('profile.noSignature') : '')}
                     </p>
                     {user.birthday && (
                         <div style={{
@@ -224,19 +232,19 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                 className="btn custom-btn"
                                 onClick={() => handleEditClick('nickname')}
                             >
-                                Change Nickname
+                                {t('profile.changeNickname')}
                             </button>
                             <button
                                 className="btn custom-btn"
                                 onClick={() => handleEditClick('signature')}
                             >
-                                Change Signature
+                                {t('profile.changeSignature')}
                             </button>
                             <button
                                 className="btn custom-btn"
                                 onClick={() => handleEditClick('birthday')}
                             >
-                                Change Birthday
+                                {t('profile.changeBirthday')}
                             </button>
                         </div>
                     )}
@@ -244,13 +252,13 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                     {!isOwnProfile && (
                         <div className="d-grid gap-2 mt-3">
                             <button className="btn custom-btn" onClick={onSendMessage}>
-                                Send Message
+                                {t('profile.sendMessage')}
                             </button>
                             <button
                                 className="btn btn-danger"
                                 onClick={() => setShowRemoveFriendModal(true)} // Show the confirmation modal
                             >
-                                Remove Friend
+                                {t('profile.removeFriend')}
                             </button>
                         </div>
                     )}
@@ -269,10 +277,10 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                             <div className="modal-header">
                                 <h5 className="modal-title">
                                     <i className="bi bi-pen"></i>
-                                    {modalType === 'avatar' ? '  Edit Avatar' : 
-                                     modalType === 'signature' ? '  Edit Signature' : 
-                                     modalType === 'birthday' ? '  Edit Birthday' : 
-                                     '  Edit Nickname'}
+                                    {modalType === 'avatar' ? `  ${t('profile.editAvatar')}` : 
+                                     modalType === 'signature' ? `  ${t('profile.editSignature')}` : 
+                                     modalType === 'birthday' ? `  ${t('profile.editBirthday')}` : 
+                                     `  ${t('profile.editNickname')}`}
                                 </h5>
                                 <button
                                     type="button"
@@ -283,16 +291,16 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                             <div className="modal-body">
                                 {modalType === 'avatar' ? (
                                     <div>
-                                        <label className="form-label">Upload new avatar image:</label>
+                                        <label className="form-label">{t('profile.uploadAvatar')}</label>
                                         <ImageUpload 
                                             onUpload={handleAvatarUpload}
-                                            buttonText="Upload Avatar"
+                                            buttonText={t('profile.uploadAvatarButton')}
                                         />
                                     </div>
                                 ) : modalType === 'signature' ? (
                                     <div>
                                         <label htmlFor="inputField" className="form-label">
-                                            Enter new signature:
+                                            {t('profile.enterSignature')}
                                         </label>
                                         <input
                                             id="inputField"
@@ -301,29 +309,32 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                             value={newInput}
                                             onChange={(e) => setNewInput(e.target.value)}
                                             maxLength="30"
-                                            placeholder="Write something about yourself..."
+                                            placeholder={t('profile.signaturePlaceholder')}
                                         />
-                                        <small className="text-muted">Maximum 30 characters</small>
+                                        <small className="text-muted">{t('profile.maxCharacters')}</small>
                                     </div>
                                 ) : modalType === 'birthday' ? (
                                     <div>
                                         <label className="form-label">
-                                            Select your birthday (Month and Day):
+                                            {t('profile.selectBirthday')}
                                         </label>
                                         <div className="row">
                                             <div className="col-6">
-                                                <label htmlFor="birthdayMonth" className="form-label small">Month</label>
+                                                <label htmlFor="birthdayMonth" className="form-label small">{t('profile.month')}</label>
                                                 <select
                                                     id="birthdayMonth"
                                                     className="form-select"
                                                     value={birthdayMonth}
                                                     onChange={(e) => setBirthdayMonth(e.target.value)}
                                                 >
-                                                    <option value="">Select Month</option>
+                                                    <option value="">{t('profile.selectMonth')}</option>
                                                     {Array.from({ length: 12 }, (_, i) => {
                                                         const monthNum = i + 1;
-                                                        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                                                                         'July', 'August', 'September', 'October', 'November', 'December'];
+                                                        const monthNames = [
+                                                            t('months.january'), t('months.february'), t('months.march'), t('months.april'),
+                                                            t('months.may'), t('months.june'), t('months.july'), t('months.august'),
+                                                            t('months.september'), t('months.october'), t('months.november'), t('months.december')
+                                                        ];
                                                         return (
                                                             <option key={monthNum} value={monthNum.toString().padStart(2, '0')}>
                                                                 {monthNames[i]}
@@ -333,14 +344,14 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                                 </select>
                                             </div>
                                             <div className="col-6">
-                                                <label htmlFor="birthdayDay" className="form-label small">Day</label>
+                                                <label htmlFor="birthdayDay" className="form-label small">{t('profile.day')}</label>
                                                 <select
                                                     id="birthdayDay"
                                                     className="form-select"
                                                     value={birthdayDay}
                                                     onChange={(e) => setBirthdayDay(e.target.value)}
                                                 >
-                                                    <option value="">Select Day</option>
+                                                    <option value="">{t('profile.selectDay')}</option>
                                                     {Array.from({ length: 31 }, (_, i) => {
                                                         const day = i + 1;
                                                         return (
@@ -352,7 +363,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                                 </select>
                                             </div>
                                         </div>
-                                        <small className="text-muted d-block mt-2">Year is not required</small>
+                                        <small className="text-muted d-block mt-2">{t('profile.yearNotRequired')}</small>
                                         <button
                                             type="button"
                                             className="btn btn-link btn-sm p-0 mt-2"
@@ -361,13 +372,13 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                                 setBirthdayDay('');
                                             }}
                                         >
-                                            Clear birthday
+                                            {t('profile.clearBirthday')}
                                         </button>
                                     </div>
                                 ) : (
                                     <div>
                                         <label htmlFor="inputField" className="form-label">
-                                            Enter new nickname:
+                                            {t('profile.enterNickname')}
                                         </label>
                                         <input
                                             id="inputField"
@@ -386,14 +397,14 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                         className="btn btn-secondary"
                                         onClick={() => setShowModal(false)}
                                     >
-                                        Cancel
+                                        {t('profile.cancel')}
                                     </button>
                                     <button
                                         type="button"
                                         className="btn btn-primary"
                                         onClick={handleSave}
                                     >
-                                        Save
+                                        {t('profile.save')}
                                     </button>
                                 </div>
                             )}
@@ -413,7 +424,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">
-                                    <i className="bi bi-exclamation-triangle"></i> Confirm Remove Friend
+                                    <i className="bi bi-exclamation-triangle"></i> {t('profile.confirmRemove')}
                                 </h5>
                                 <button
                                     type="button"
@@ -422,7 +433,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                 ></button>
                             </div>
                             <div className="modal-body">
-                                Are you sure you want to remove this friend?
+                                {t('profile.sureRemove')}
                             </div>
                             <div className="modal-footer">
                                 <button
@@ -430,7 +441,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                     className="btn btn-secondary"
                                     onClick={() => setShowRemoveFriendModal(false)}
                                 >
-                                    Cancel
+                                    {t('profile.cancel')}
                                 </button>
                                 <button
                                     type="button"
@@ -440,7 +451,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                         setShowRemoveFriendModal(false);
                                     }}
                                 >
-                                    Remove
+                                    {t('profile.remove')}
                                 </button>
                             </div>
                         </div>
