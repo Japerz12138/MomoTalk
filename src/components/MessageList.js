@@ -28,8 +28,15 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
         return nickname.length > 10 ? `${nickname.slice(0, 10)}...` : nickname;
     };
 
-    //Sort the message with time stamp
-    const sortedMessages = [...messages].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    //Sort the message: multi-device first, then by timestamp
+    const sortedMessages = [...messages].sort((a, b) => {
+        if (a.isSelf !== b.isSelf) {
+            return a.isSelf ? -1 : 1; // Multi-device first
+        }
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timeB - timeA; // Most recent first
+    });
 
     // Filter messages based on search query
     const filteredMessages = sortedMessages.filter((msg) => {
@@ -82,30 +89,52 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                             msg.id === selectedMessageId ? 'active' : ''
                         }`}
                         onClick={() => handleSelectMessage(msg)}
-                        style={{ cursor: 'pointer' }}
+                        style={{ 
+                            cursor: 'pointer',
+                            backgroundColor: msg.isSelf ? (msg.id === selectedMessageId ? '#e7f3ff' : '#f8f9fa') : undefined,
+                            borderLeft: msg.isSelf ? (msg.id === selectedMessageId ? '3px solid #4C5B6F' : '3px solid transparent') : undefined
+                        }}
                     >
                         <div style={{ position: 'relative' }}>
-                            <img
-                                src={getFullImageUrl(msg.avatar || DEFAULT_AVATAR)}
-                                alt={msg.nickname}
-                                className="rounded-circle me-2"
-                                style={{ width: '40px', height: '40px', objectFit: 'cover' }}
-                            />
-                            {msg.isOnline && (
-                                <span
-                                    style={{
-                                        position: 'absolute',
-                                        bottom: 0,
-                                        right: '7px',
-                                        width: '12px',
-                                        height: '12px',
-                                        backgroundColor: '#28a745',
-                                        borderRadius: '50%',
-                                        boxShadow: '0 0 0 2.5px white',
-                                        display: 'block',
-                                        flexShrink: 0,
-                                    }}
-                                ></span>
+                            {msg.isSelf ? (
+                                <div style={{ 
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#e9ecef',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginRight: '12px',
+                                    flexShrink: 0
+                                }}>
+                                    <i className="bi bi-box-arrow-up-right" style={{ fontSize: '18px', color: '#6c757d' }}></i>
+                                </div>
+                            ) : (
+                                <>
+                                    <img
+                                        src={getFullImageUrl(msg.avatar || DEFAULT_AVATAR)}
+                                        alt={msg.nickname}
+                                        className="rounded-circle me-2"
+                                        style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                                    />
+                                    {msg.isOnline && (
+                                        <span
+                                            style={{
+                                                position: 'absolute',
+                                                bottom: 0,
+                                                right: '7px',
+                                                width: '12px',
+                                                height: '12px',
+                                                backgroundColor: '#28a745',
+                                                borderRadius: '50%',
+                                                boxShadow: '0 0 0 2.5px white',
+                                                display: 'block',
+                                                flexShrink: 0,
+                                            }}
+                                        ></span>
+                                    )}
+                                </>
                             )}
                         </div>
                         <div className="flex-grow-1" style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -117,7 +146,8 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                                         textOverflow: 'ellipsis', 
                                         whiteSpace: 'nowrap',
                                         flex: '1 1 auto',
-                                        minWidth: 0
+                                        minWidth: 0,
+                                        color: msg.isSelf ? '#6c757d' : undefined
                                     }}
                                 >
                                     {truncateNickname(msg.nickname)}

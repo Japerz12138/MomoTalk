@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
 
-const FriendList = ({ friends, onSelectFriend }) => {
+const FriendList = ({ friends, onSelectFriend, userId, nickname, avatar, showMultiDevice = true }) => {
     const { t } = useTranslation();
     const [selectedFriendId, setSelectedFriendId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -85,6 +85,46 @@ const FriendList = ({ friends, onSelectFriend }) => {
 
             {/* Friends list */}
             <div className="list-group" style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+                {userId && showMultiDevice && (
+                    <button
+                        type="button"
+                        className={`list-group-item list-group-item-action d-flex align-items-center ${
+                            'self' === selectedFriendId ? 'active' : ''
+                        }`}
+                        onClick={() => {
+                            setSelectedFriendId('self');
+                            onSelectFriend({ id: userId, nickname: nickname || t('friendList.multiDevice'), avatar, isSelf: true });
+                        }}
+                        style={{ 
+                            backgroundColor: selectedFriendId === 'self' ? '#e7f3ff' : '#f8f9fa',
+                            borderLeft: selectedFriendId === 'self' ? '3px solid #4C5B6F' : '3px solid transparent'
+                        }}
+                    >
+                        <div style={{ 
+                            position: 'relative',
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            backgroundColor: '#e9ecef',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: '12px',
+                            flexShrink: 0
+                        }}>
+                            <i className="bi bi-box-arrow-up-right" style={{ fontSize: '18px', color: '#6c757d' }}></i>
+                        </div>
+                        <div className="flex-grow-1 text-start" style={{ overflow: 'hidden', minWidth: 0 }}>
+                            <div style={{ 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis', 
+                                whiteSpace: 'nowrap' 
+                            }}>
+                                <strong style={{ color: '#6c757d' }}>{t('friendList.multiDevice')}</strong>
+                            </div>
+                        </div>
+                    </button>
+                )}
                 {filteredFriends.length > 0 ? (
                     filteredFriends.map((friend) => (
                     <button

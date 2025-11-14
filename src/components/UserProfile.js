@@ -256,9 +256,9 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                             </button>
                             <button
                                 className="btn btn-danger"
-                                onClick={() => setShowRemoveFriendModal(true)} // Show the confirmation modal
+                                onClick={() => setShowRemoveFriendModal(true)}
                             >
-                                {t('profile.removeFriend')}
+                                {user.isSelf ? t('profile.clearChatHistory') : t('profile.removeFriend')}
                             </button>
                         </div>
                     )}
@@ -424,7 +424,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">
-                                    <i className="bi bi-exclamation-triangle"></i> {t('profile.confirmRemove')}
+                                    <i className="bi bi-exclamation-triangle"></i> {user.isSelf ? t('profile.confirmClearChat') : t('profile.confirmRemove')}
                                 </h5>
                                 <button
                                     type="button"
@@ -433,7 +433,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                 ></button>
                             </div>
                             <div className="modal-body">
-                                {t('profile.sureRemove')}
+                                {user.isSelf ? t('profile.sureClearChat') : t('profile.sureRemove')}
                             </div>
                             <div className="modal-footer">
                                 <button
@@ -451,7 +451,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                                         setShowRemoveFriendModal(false);
                                     }}
                                 >
-                                    {t('profile.remove')}
+                                    {user.isSelf ? t('profile.clear') : t('profile.remove')}
                                 </button>
                             </div>
                         </div>

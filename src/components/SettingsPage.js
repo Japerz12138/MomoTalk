@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
 
-const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMode, onToggleAutoMode, onDeleteAccount }) => {
+const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMode, onToggleAutoMode, onDeleteAccount, showMultiDevice, onToggleMultiDevice }) => {
     const { t, i18n } = useTranslation();
     const [oldPassword, setOldPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
@@ -244,6 +244,26 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
             {/*    </div>*/}
             {/*</div>*/}
 
+
+            {/* Multi-Device Section */}
+            <div className="card mb-4">
+                <div className="card-body">
+                    <h5 className="card-title">{t('settings.multiDevice')}</h5>
+                    <div className="form-check form-switch">
+                        <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="multiDeviceSwitch"
+                            checked={showMultiDevice}
+                            onChange={onToggleMultiDevice}
+                        />
+                        <label className="form-check-label" htmlFor="multiDeviceSwitch">
+                            {t('settings.showMultiDevice')}
+                        </label>
+                    </div>
+                    <small className="text-muted d-block mt-2">{t('settings.multiDeviceDesc')}</small>
+                </div>
+            </div>
 
             {/* Notifications Section */}
             <div className="card mb-4">

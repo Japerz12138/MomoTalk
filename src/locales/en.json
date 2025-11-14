@@ -29,8 +29,8 @@
   "chat": {
     "noMessagesYet": "No messages yet.",
     "maybeStartWithAHi": "Maybe start with a \"Hi\"?",
-    "chatWith": "Chat with {{friendName}}",
-    "startAConversation": "Start a conversation with {{friendName}}"
+    "chatWith": "Chat with {{currentChat}}",
+    "startAConversation": "Start a conversation with {{currentChat}}"
   },
   "messageInput": {
     "uploadImage": "Upload Image",
@@ -69,7 +69,10 @@
     "deleteAccountWarning": "Once you delete your account, there is no going back. Please be certain.",
     "deleteAccount": "Delete Account",
     "language": "Language",
-    "selectLanguage": "Select Language"
+    "selectLanguage": "Select Language",
+    "multiDevice": "Multi-Device",
+    "showMultiDevice": "Show Other Device",
+    "multiDeviceDesc": "Display the \"Other Device\" option in friend list and chat list for multi-device sync and memos"
   },
   "deleteAccount": {
     "warning": "SYSTEM WARNING",
@@ -109,7 +112,8 @@
     "search": "Search friends...",
     "online": "{{online}}/{{total}} online",
     "noFriends": "Time to add some friends!",
-    "noResults": "No friends found matching \"{{query}}\""
+    "noResults": "No friends found matching \"{{query}}\"",
+    "multiDevice": "Other Device"
   },
   "messageList": {
     "search": "Search conversations...",
@@ -166,7 +170,11 @@
     "save": "Save",
     "confirmRemove": "Confirm Remove Friend",
     "sureRemove": "Are you sure you want to remove this friend?",
-    "remove": "Remove"
+    "remove": "Remove",
+    "clearChatHistory": "Clear Chat History",
+    "confirmClearChat": "Confirm Clear Chat History",
+    "sureClearChat": "Are you sure you want to clear chat history?",
+    "clear": "Clear"
   },
   "months": {
     "january": "January",

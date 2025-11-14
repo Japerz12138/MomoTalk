@@ -489,6 +489,9 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Allow self-messaging for multi-device sync
+        const isSelfMessage = senderId === receiverId;
+
         // Check if text has content (including emoji) or if there's an image
         const hasText = text && text.trim().length > 0;
         const hasImage = imageUrl && imageUrl.trim().length > 0;
@@ -520,16 +523,21 @@ io.on('connection', (socket) => {
                     if (!userErr && userResults.length > 0) {
                         const { nickname, avatar } = userResults[0];
 
-                        io.to(receiverId.toString()).emit('receive_message', {
+                        const emitData = {
                             senderId,
                             receiverId,
                             text: hasText ? textValue : null,
                             imageUrl: hasImage ? imageUrl : null,
                             messageType,
-                            timestamp: new Date().toISOString(), //TO UTC TIME
+                            timestamp: new Date().toISOString(),
                             nickname,
                             avatar,
-                        });
+                        };
+                        if (isSelfMessage) {
+                            io.to(senderId.toString()).emit('receive_message', emitData);
+                        } else {
+                            io.to(receiverId.toString()).emit('receive_message', emitData);
+                        }
                     } else {
                         console.error('Error fetching sender info:', userErr ? userErr.message : 'No user found');
                     }

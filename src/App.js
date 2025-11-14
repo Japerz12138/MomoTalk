@@ -69,6 +69,10 @@ function App() {
     const [showNotificationModal, setShowNotificationModal] = useState(false);
     const [showEmojiPanel, setShowEmojiPanel] = useState(false);
     const [imageQueue, setImageQueue] = useState([]); // [{ id, preview, imageUrl, uploading }]
+    const [showMultiDevice, setShowMultiDevice] = useState(() => {
+        const stored = localStorage.getItem('showMultiDevice');
+        return stored !== null ? JSON.parse(stored) : true; // Default to true
+    });
     
     // Mobile-specific states
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -273,8 +277,11 @@ function App() {
             const uniqueFriends = response.data.filter((friend, index, self) =>
                 index === self.findIndex(f => f.id === friend.id)
             );
-            // Sort friends by lastMessageTime (most recent first), then by addedAt for friends without messages
+            // Sort friends: online first, then by lastMessageTime (most recent first)
             const sortedFriends = uniqueFriends.sort((a, b) => {
+                if (a.isOnline !== b.isOnline) {
+                    return b.isOnline ? 1 : -1; // Online users first
+                }
                 const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
                 const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
                 return timeB - timeA; // Descending order (newest first)
@@ -363,19 +370,24 @@ function App() {
                     self: message.senderId === userId,
                 };
 
-                // Update unread count if not viewing this friend's chat
-                // Check if we're in chat section AND viewing this specific friend's chat
-                const isViewingThisFriend = currentActiveSection === 'chat' && currentSelectedFriend && currentSelectedFriend.id === friendId;
+                // Handle self-messages (multi-device sync)
+                const isSelfMessage = friendId === userId;
+                const isViewingThisFriend = currentActiveSection === 'chat' && currentSelectedFriend && (
+                    (isSelfMessage && currentSelectedFriend.isSelf) || 
+                    (!isSelfMessage && currentSelectedFriend.id === friendId)
+                );
                 
                 if (!isViewingThisFriend) {
-                    setUnreadMessagesCount((prev) => {
-                        const updated = {
-                            ...prev,
-                            [friendId]: (prev[friendId] || 0) + 1,
-                        };
-                        localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
-                        return updated;
-                    });
+                    if (!isSelfMessage) {
+                        setUnreadMessagesCount((prev) => {
+                            const updated = {
+                                ...prev,
+                                [friendId]: (prev[friendId] || 0) + 1,
+                            };
+                            localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
+                            return updated;
+                        });
+                    }
                 } else {
                     // Check for duplicates before adding
                     setDms((prevDms) => {
@@ -408,25 +420,31 @@ function App() {
                     return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 });
 
-                // Update friend and move to top of list (sorted by lastMessageTime)
-                const updatedFriends = prevFriends.map((friend) =>
-                    friend.id === friendId
-                        ? {
-                            ...friend,
-                            lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
-                            lastMessageTime: message.timestamp,
-                            imageUrl: message.imageUrl,
-                            avatar: senderFriend ? senderFriend.avatar : friend.avatar,
-                        }
-                        : friend
-                );
+                // Update friend and move to top of list (sorted by lastMessageTime) - skip for self-messages
+                if (!isSelfMessage) {
+                    const updatedFriends = prevFriends.map((friend) =>
+                        friend.id === friendId
+                            ? {
+                                ...friend,
+                                lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
+                                lastMessageTime: message.timestamp,
+                                imageUrl: message.imageUrl,
+                                avatar: senderFriend ? senderFriend.avatar : friend.avatar,
+                            }
+                            : friend
+                    );
 
-                // Sort friends by lastMessageTime (most recent first), then by addedAt for friends without messages
-                return updatedFriends.sort((a, b) => {
-                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
-                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
-                    return timeB - timeA; // Descending order (newest first)
-                });
+                    // Sort friends: online first, then by lastMessageTime (most recent first)
+                    return updatedFriends.sort((a, b) => {
+                        if (a.isOnline !== b.isOnline) {
+                            return b.isOnline ? 1 : -1; // Online users first
+                        }
+                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                        return timeB - timeA; // Descending order (newest first)
+                    });
+                }
+                return prevFriends;
             });
         };
 
@@ -470,23 +488,41 @@ function App() {
     //User online status
     useEffect(() => {
         socket.on('friend_status_update', ({ friendId, isOnline }) => {
-            setFriends((prevFriends) =>
-                prevFriends.map((friend) =>
+            setFriends((prevFriends) => {
+                const updated = prevFriends.map((friend) =>
                     friend.id === friendId && friend.isOnline !== isOnline //Prevent Loop respones
                         ? { ...friend, isOnline }
                         : friend
-                )
-            );
+                );
+                // Sort friends: online first, then by lastMessageTime
+                return updated.sort((a, b) => {
+                    if (a.isOnline !== b.isOnline) {
+                        return b.isOnline ? 1 : -1; // Online users first
+                    }
+                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                    return timeB - timeA;
+                });
+            });
         });
 
         // Handle batch status updates
         socket.on('friends_status_response', (statusUpdates) => {
-            setFriends((prevFriends) =>
-                prevFriends.map((friend) => {
+            setFriends((prevFriends) => {
+                const updated = prevFriends.map((friend) => {
                     const update = statusUpdates.find(s => s.friendId === friend.id);
                     return update ? { ...friend, isOnline: update.isOnline } : friend;
-                })
-            );
+                });
+                // Sort friends: online first, then by lastMessageTime
+                return updated.sort((a, b) => {
+                    if (a.isOnline !== b.isOnline) {
+                        return b.isOnline ? 1 : -1; // Online users first
+                    }
+                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                    return timeB - timeA;
+                });
+            });
         });
 
         return () => {
@@ -802,6 +838,29 @@ function App() {
     const handleSelectFriend = async (friend) => {
         if (!token || !friend) return;
 
+        if (friend.isSelf) {
+            setSelectedFriend(friend);
+            try {
+                const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/dm/${userId}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const messagesWithAvatar = response.data.map((message) => ({
+                    ...message,
+                    self: true,
+                    avatar: avatar || DEFAULT_AVATAR,
+                }));
+                setDms(messagesWithAvatar);
+            } catch (error) {
+                if (error.response?.status === 401) {
+                    console.error('Unauthorized! Clearing token.');
+                    handleLogout();
+                } else {
+                    console.error('Error fetching self DMs:', error);
+                }
+            }
+            return;
+        }
+
         const selected = friends.find((f) => f.id === friend.id);
         if (!selected) return;
 
@@ -942,12 +1001,13 @@ function App() {
         }
         
         if ((hasText || hasImages) && selectedFriend) {
+            const receiverId = selectedFriend.isSelf ? userId : selectedFriend.id;
             // If multiple images, send them separately; if single image or text+image, send together
             if (hasImages && hasImages.length === 1 && hasText) {
                 // Single image with text - send together
                 const newMessage = {
                     senderId: userId,
-                    receiverId: selectedFriend.id,
+                    receiverId: receiverId,
                     text: input.trim(),
                     imageUrl: imageUrls[0],
                     timestamp: new Date().toISOString(),
@@ -969,29 +1029,34 @@ function App() {
                 setImageQueue([]); // Clear queue after sending
 
                 //Update messageList and sort by lastMessageTime
-                setFriends((prevFriends) => {
-                    const updated = prevFriends.map((friend) =>
-                        friend.id === selectedFriend.id
-                            ? {
-                                ...friend,
-                                lastMessage: newMessage.text || '[Image]',
-                                lastMessageTime: newMessage.timestamp,
+                if (!selectedFriend.isSelf) {
+                    setFriends((prevFriends) => {
+                        const updated = prevFriends.map((friend) =>
+                            friend.id === selectedFriend.id
+                                ? {
+                                    ...friend,
+                                    lastMessage: newMessage.text || '[Image]',
+                                    lastMessageTime: newMessage.timestamp,
+                                }
+                                : friend
+                        );
+                        // Sort: online first, then by lastMessageTime (most recent first)
+                        return updated.sort((a, b) => {
+                            if (a.isOnline !== b.isOnline) {
+                                return b.isOnline ? 1 : -1; // Online users first
                             }
-                            : friend
-                    );
-                    // Sort by lastMessageTime (most recent first)
-                    return updated.sort((a, b) => {
-                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
-                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
-                        return timeB - timeA;
+                            const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                            const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                            return timeB - timeA;
+                        });
                     });
-                });
+                }
             } else {
                 // Multiple images or images only - send text first (if any), then images
                 if (hasText) {
                     const textMessage = {
                         senderId: userId,
-                        receiverId: selectedFriend.id,
+                        receiverId: receiverId,
                         text: input.trim(),
                         timestamp: new Date().toISOString(),
                         avatar: nickname,
@@ -1011,7 +1076,7 @@ function App() {
                 imageUrls.forEach((imageUrl, index) => {
                     const imageMessage = {
                         senderId: userId,
-                        receiverId: selectedFriend.id,
+                        receiverId: receiverId,
                         text: null,
                         imageUrl: imageUrl,
                         timestamp: new Date(Date.now() + index).toISOString(), // Slight delay to maintain order
@@ -1032,24 +1097,29 @@ function App() {
                 setImageQueue([]); // Clear queue after sending
 
                 //Update messageList and sort by lastMessageTime
-                const lastMessage = hasText ? input.trim() : '[Image]';
-                setFriends((prevFriends) => {
-                    const updated = prevFriends.map((friend) =>
-                        friend.id === selectedFriend.id
-                            ? {
-                                ...friend,
-                                lastMessage: lastMessage,
-                                lastMessageTime: new Date().toISOString(),
+                if (!selectedFriend.isSelf) {
+                    const lastMessage = hasText ? input.trim() : '[Image]';
+                    setFriends((prevFriends) => {
+                        const updated = prevFriends.map((friend) =>
+                            friend.id === selectedFriend.id
+                                ? {
+                                    ...friend,
+                                    lastMessage: lastMessage,
+                                    lastMessageTime: new Date().toISOString(),
+                                }
+                                : friend
+                        );
+                        // Sort: online first, then by lastMessageTime (most recent first)
+                        return updated.sort((a, b) => {
+                            if (a.isOnline !== b.isOnline) {
+                                return b.isOnline ? 1 : -1; // Online users first
                             }
-                            : friend
-                    );
-                    // Sort by lastMessageTime (most recent first)
-                    return updated.sort((a, b) => {
-                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
-                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
-                        return timeB - timeA;
+                            const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                            const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                            return timeB - timeA;
+                        });
                     });
-                });
+                }
             }
         }
     };
@@ -1066,9 +1136,10 @@ function App() {
         }
         
         if (imageUrl && selectedFriend) {
+            const receiverId = selectedFriend.isSelf ? userId : selectedFriend.id;
             const newMessage = {
                 senderId: userId,
-                receiverId: selectedFriend.id,
+                receiverId: receiverId,
                 text: input.trim() || null, // Include text if there is any
                 imageUrl: imageUrl,
                 timestamp: new Date().toISOString(),
@@ -1089,24 +1160,26 @@ function App() {
             setInput(''); // Clear text input after sending
 
             //Update messageList to show latest messages with image indicator and sort
-            setFriends((prevFriends) => {
-                const updated = prevFriends.map((friend) =>
-                    friend.id === selectedFriend.id
-                        ? {
-                            ...friend,
-                            lastMessage: newMessage.text || '[Image]',
-                            lastMessageTime: newMessage.timestamp,
-                            imageUrl: imageUrl,
-                        }
-                        : friend
-                );
-                // Sort by lastMessageTime (most recent first)
-                return updated.sort((a, b) => {
-                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
-                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
-                    return timeB - timeA;
+            if (!selectedFriend.isSelf) {
+                setFriends((prevFriends) => {
+                    const updated = prevFriends.map((friend) =>
+                        friend.id === selectedFriend.id
+                            ? {
+                                ...friend,
+                                lastMessage: newMessage.text || '[Image]',
+                                lastMessageTime: newMessage.timestamp,
+                                imageUrl: imageUrl,
+                            }
+                            : friend
+                    );
+                    // Sort by lastMessageTime (most recent first)
+                    return updated.sort((a, b) => {
+                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                        return timeB - timeA;
+                    });
                 });
-            });
+            }
         }
     };
 
@@ -1386,17 +1459,36 @@ function App() {
                                 {activeSection === 'chat' && (
                                     <div className="mobile-chat-list" style={{ height: '100%', overflow: 'auto' }}>
                                         <MessageList
-                                            messages={friends.map(friend => ({
-                                                id: friend.id,
-                                                username: friend.username,
-                                                nickname: friend.nickname,
-                                                text: friend.lastMessage || null,
-                                                imageUrl: friend.imageUrl || null,
-                                                timestamp: friend.lastMessageTime || friend.addedAt || null,
-                                                avatar: friend.avatar,
-                                                isOnline: friend.isOnline,
-                                            }))}
-                                            onSelectMessage={handleSelectFriendMobile}
+                                            messages={[
+                                                ...(userId && showMultiDevice ? [{
+                                                    id: userId,
+                                                    username: username,
+                                                    nickname: t('friendList.multiDevice'),
+                                                    text: null,
+                                                    imageUrl: null,
+                                                    timestamp: null,
+                                                    avatar: avatar,
+                                                    isOnline: false,
+                                                    isSelf: true,
+                                                }] : []),
+                                                ...friends.map(friend => ({
+                                                    id: friend.id,
+                                                    username: friend.username,
+                                                    nickname: friend.nickname,
+                                                    text: friend.lastMessage || null,
+                                                    imageUrl: friend.imageUrl || null,
+                                                    timestamp: friend.lastMessageTime || friend.addedAt || null,
+                                                    avatar: friend.avatar,
+                                                    isOnline: friend.isOnline,
+                                                }))
+                                            ]}
+                                            onSelectMessage={(msg) => {
+                                                if (msg.isSelf) {
+                                                    handleSelectFriend({ id: userId, nickname: t('friendList.multiDevice'), avatar, isSelf: true });
+                                                } else {
+                                                    handleSelectFriendMobile(msg);
+                                                }
+                                            }}
                                             unreadMessagesCount={unreadMessagesCount}
                                             isMobile={true}
                                         />
@@ -1410,6 +1502,10 @@ function App() {
                                             onSelectFriend={(friend) => {
                                                 setSelectedFriend(friend);
                                             }}
+                                            userId={userId}
+                                            nickname={nickname}
+                                            avatar={avatar}
+                                            showMultiDevice={showMultiDevice}
                                             isMobile={true}
                                         />
                                     </div>
@@ -1423,7 +1519,24 @@ function App() {
                                             onSendMessage={() => {
                                                 setActiveSection('chat');
                                             }}
-                                            onRemoveFriend={handleRemoveFriend}
+                                            onRemoveFriend={selectedFriend.isSelf ? async () => {
+                                                try {
+                                                    await axios.post(
+                                                        `${process.env.REACT_APP_SERVER_DOMAIN}/dm/delete`,
+                                                        { friendId: userId },
+                                                        { headers: { Authorization: `Bearer ${token}` } }
+                                                    );
+                                                    alert(t('toast.dmDeleted'));
+                                                    setDms([]);
+                                                    setSelectedFriend(null);
+                                                } catch (error) {
+                                                    console.error('Error deleting DM history:', error);
+                                                    alert(t('toast.deleteError'));
+                                                }
+                                            } : () => {
+                                                handleRemoveFriend(selectedFriend.id);
+                                                setSelectedFriend(null);
+                                            }}
                                             onClose={() => setSelectedFriend(null)}
                                             isMobile={true}
                                         />
@@ -1460,6 +1573,12 @@ function App() {
                                             onToggleDarkMode={toggleDarkMode}
                                             onToggleAutoMode={toggleAutoMode}
                                             onDeleteAccount={handleDeleteAccount}
+                                            showMultiDevice={showMultiDevice}
+                                            onToggleMultiDevice={() => {
+                                                const newValue = !showMultiDevice;
+                                                setShowMultiDevice(newValue);
+                                                localStorage.setItem('showMultiDevice', JSON.stringify(newValue));
+                                            }}
                                             onUpdateProfile={async ({ nickname, avatar: newAvatar, signature: newSignature, birthday: newBirthday }) => {
                                                 try {
                                                     const response = await axios.post(
@@ -1565,17 +1684,36 @@ function App() {
                             >
                                 {activeSection === 'chat' && (
                                     <MessageList
-                                        messages={friends.map(friend => ({
-                                            id: friend.id,
-                                            username: friend.username,
-                                            nickname: friend.nickname,
-                                            text: friend.lastMessage || null,
-                                            imageUrl: friend.imageUrl || null,
-                                            timestamp: friend.lastMessageTime || friend.addedAt || null,
-                                            avatar: friend.avatar,
-                                            isOnline: friend.isOnline,
-                                        }))}
-                                        onSelectMessage={handleSelectFriend}
+                                        messages={[
+                                            ...(userId && showMultiDevice ? [{
+                                                id: userId,
+                                                username: username,
+                                                nickname: t('friendList.multiDevice'),
+                                                text: null,
+                                                imageUrl: null,
+                                                timestamp: null,
+                                                avatar: avatar,
+                                                isOnline: false,
+                                                isSelf: true,
+                                            }] : []),
+                                            ...friends.map(friend => ({
+                                                id: friend.id,
+                                                username: friend.username,
+                                                nickname: friend.nickname,
+                                                text: friend.lastMessage || null,
+                                                imageUrl: friend.imageUrl || null,
+                                                timestamp: friend.lastMessageTime || friend.addedAt || null,
+                                                avatar: friend.avatar,
+                                                isOnline: friend.isOnline,
+                                            }))
+                                        ]}
+                                        onSelectMessage={(msg) => {
+                                            if (msg.isSelf) {
+                                                handleSelectFriend({ id: userId, nickname: t('friendList.multiDevice'), avatar, isSelf: true });
+                                            } else {
+                                                handleSelectFriend(msg);
+                                            }
+                                        }}
                                         unreadMessagesCount={unreadMessagesCount}
                                     />
                                 )}
@@ -1586,6 +1724,10 @@ function App() {
                                         onSelectFriend={(friend) => {
                                             handleSelectFriend(friend);
                                         }}
+                                        userId={userId}
+                                        nickname={nickname}
+                                        avatar={avatar}
+                                        showMultiDevice={showMultiDevice}
                                     />
                                 )}
 
@@ -1655,7 +1797,21 @@ function App() {
                                             setActiveSection('chat');
                                             handleSelectFriend(selectedFriend);
                                         }}
-                                        onRemoveFriend={() => {
+                                        onRemoveFriend={selectedFriend.isSelf ? async () => {
+                                            try {
+                                                await axios.post(
+                                                    `${process.env.REACT_APP_SERVER_DOMAIN}/dm/delete`,
+                                                    { friendId: userId },
+                                                    { headers: { Authorization: `Bearer ${token}` } }
+                                                );
+                                                alert(t('toast.dmDeleted'));
+                                                setDms([]);
+                                                setSelectedFriend(null);
+                                            } catch (error) {
+                                                console.error('Error deleting DM history:', error);
+                                                alert(t('toast.deleteError'));
+                                            }
+                                        } : () => {
                                             handleRemoveFriend(selectedFriend.id);
                                             setSelectedFriend(null);
                                         }}
@@ -1698,6 +1854,12 @@ function App() {
                                         onToggleDarkMode={toggleDarkMode}
                                         onToggleAutoMode={toggleAutoMode}
                                         onDeleteAccount={handleDeleteAccount}
+                                        showMultiDevice={showMultiDevice}
+                                        onToggleMultiDevice={() => {
+                                            const newValue = !showMultiDevice;
+                                            setShowMultiDevice(newValue);
+                                            localStorage.setItem('showMultiDevice', JSON.stringify(newValue));
+                                        }}
                                     />
                                 )}
                             </div>
