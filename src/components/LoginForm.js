@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
@@ -13,8 +13,26 @@ function LoginForm({
                        onSwitchToRegister,
                        error,
                    }) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [localPassword, setLocalPassword] = useState(password || '');
+    const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+    const languageDropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (languageDropdownRef.current && !languageDropdownRef.current.contains(event.target)) {
+                setShowLanguageDropdown(false);
+            }
+        };
+
+        if (showLanguageDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showLanguageDropdown]);
 
     return (
         <div
@@ -34,7 +52,53 @@ function LoginForm({
                             <div className="row">
                                 <div className="col-lg-12">
                                     <div className="p-5">
-                                        <div className="text-center">
+                                        <div className="text-center position-relative">
+                                            <div className="position-absolute top-0 end-0" ref={languageDropdownRef}>
+                                                <div className="dropdown">
+                                                    <button
+                                                        className="btn btn-outline-secondary btn-sm dropdown-toggle"
+                                                        type="button"
+                                                        id="loginLanguageDropdown"
+                                                        aria-expanded={showLanguageDropdown}
+                                                        onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                                                        style={{
+                                                            color: '#4C5B6F',
+                                                            borderColor: '#4C5B6F',
+                                                            fontSize: '0.875rem'
+                                                        }}
+                                                    >
+                                                        {i18n.language === 'zh-CN' ? '简体中文' : 'English'}
+                                                    </button>
+                                                    <ul className={`dropdown-menu ${showLanguageDropdown ? 'show' : ''}`} aria-labelledby="loginLanguageDropdown" style={{ minWidth: 'auto' }}>
+                                                        <li>
+                                                            <a
+                                                                className={`dropdown-item ${i18n.language === 'en' ? 'active' : ''}`}
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    i18n.changeLanguage('en');
+                                                                    setShowLanguageDropdown(false);
+                                                                }}
+                                                            >
+                                                                English
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a
+                                                                className={`dropdown-item ${i18n.language === 'zh-CN' ? 'active' : ''}`}
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    i18n.changeLanguage('zh-CN');
+                                                                    setShowLanguageDropdown(false);
+                                                                }}
+                                                            >
+                                                                简体中文
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
                                             <svg
                                                 xmlns="http://www.w3.org/2000/svg"
                                                 width="32px"

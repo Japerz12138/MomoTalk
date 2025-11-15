@@ -10,7 +10,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production && npm install react-scripts
+RUN npm ci --only=production --legacy-peer-deps && npm install react-scripts --legacy-peer-deps
 
 # Copy source code
 COPY . .
