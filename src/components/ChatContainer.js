@@ -5,7 +5,7 @@ import MessageInput from './MessageInput';
 import { getFullImageUrl } from '../utils/imageHelper';
 import { useTranslation } from 'react-i18next';
 
-const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue }) => {
+const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue, onReply, onDeleteMessage, replyTo, onCancelReply }) => {
     const chatEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const { t } = useTranslation();
@@ -14,6 +14,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
     const [fullImageView, setFullImageView] = useState(null);
     const [savingEmoji, setSavingEmoji] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+    const [contextMenu, setContextMenu] = useState(null);
     const scrollTimeoutRef = useRef(null);
     const lastScrollHeightRef = useRef(0);
 
@@ -198,6 +199,55 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
         }
     };
 
+    const handleContextMenu = (e, message) => {
+        e.preventDefault();
+        if ((!message.self && onReply) || (message.self && onDeleteMessage)) {
+            const menuWidth = 180;
+            const menuHeight = 50;
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            
+            let x = e.clientX;
+            let y = e.clientY;
+            
+            // 如果鼠标在右侧，菜单显示在左侧
+            if (x + menuWidth > windowWidth) {
+                x = e.clientX - menuWidth;
+            }
+            
+            // 如果鼠标在下侧，菜单显示在上方
+            if (y + menuHeight > windowHeight) {
+                y = e.clientY - menuHeight;
+            }
+            
+            // 确保菜单不会超出左边界
+            if (x < 0) {
+                x = 10;
+            }
+            
+            // 确保菜单不会超出上边界
+            if (y < 0) {
+                y = 10;
+            }
+            
+            setContextMenu({
+                x: x,
+                y: y,
+                message: message
+            });
+        }
+    };
+
+    useEffect(() => {
+        const handleClickOutside = () => {
+            setContextMenu(null);
+        };
+        if (contextMenu) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    }, [contextMenu]);
+
 
     return (
         <div style={{ 
@@ -290,6 +340,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                 className="message-wrapper mb-3"
                                 onMouseEnter={() => setHoveredMessageIndex(index)}
                                 onMouseLeave={() => setHoveredMessageIndex(null)}
+                                onContextMenu={(e) => handleContextMenu(e, message)}
                                 style={{ position: 'relative' }}
                             >
                                 <div
@@ -305,7 +356,21 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                             style={{ objectFit: 'cover', objectPosition: 'center' }}
                                         />
                                     )}
-                                    <div className={`chat-bubble ${message.self ? 'self' : 'other'}`}>
+                                    <div className={`chat-bubble ${message.self ? 'self' : 'other'}`} style={{ position: 'relative' }}>
+                                        {message.replyTo && (
+                                            <div style={{
+                                                padding: '8px',
+                                                marginBottom: '8px',
+                                                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                                borderRadius: '4px',
+                                                borderLeft: '3px solid #FFFFFF',
+                                                fontSize: '0.85rem',
+                                                color: '#FFFFFF'
+                                            }}>
+                                                {message.replyTo.imageUrl && <div>[Image]</div>}
+                                                {message.replyTo.text && <div>{message.replyTo.text}</div>}
+                                            </div>
+                                        )}
                                         {message.imageUrl && (
                                             <div
                                                 style={{ 
@@ -464,6 +529,8 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                     imageQueue={imageQueue}
                     onAddImageToQueue={onAddImageToQueue}
                     onRemoveImageFromQueue={onRemoveImageFromQueue}
+                    replyTo={replyTo}
+                    onCancelReply={onCancelReply}
                 />
             )}
 
@@ -487,6 +554,44 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                             }}
                         />
                     </div>
+                </div>
+            )}
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div
+                    className="dropdown-menu show"
+                    style={{
+                        position: 'fixed',
+                        top: `${contextMenu.y}px`,
+                        left: `${contextMenu.x}px`,
+                        zIndex: 10000,
+                        display: 'block'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {!contextMenu.message.self && onReply && (
+                        <button
+                            className="dropdown-item"
+                            onClick={() => {
+                                onReply(contextMenu.message);
+                                setContextMenu(null);
+                            }}
+                        >
+                            <i className="bi bi-reply me-2"></i>回复
+                        </button>
+                    )}
+                    {contextMenu.message.self && onDeleteMessage && (
+                        <button
+                            className="dropdown-item text-danger"
+                            onClick={() => {
+                                onDeleteMessage(contextMenu.message);
+                                setContextMenu(null);
+                            }}
+                        >
+                            <i className="bi bi-backspace-reverse me-2"></i>撤回
+                        </button>
+                    )}
                 </div>
             )}
         </div>

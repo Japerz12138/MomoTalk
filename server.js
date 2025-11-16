@@ -223,7 +223,7 @@ function decryptMessage(encryptedText) {
 // Middleware configuration
 app.use(cors({
     origin: HOST_DOMAIN,
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'DELETE'],
     credentials: true
 }));
 
@@ -1599,6 +1599,20 @@ app.get('/users/search', authenticateToken, (req, res) => {
     db.query(searchQuery, [formattedQuery], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(results);
+    });
+});
+
+app.delete('/dm/message/:messageId', authenticateToken, (req, res) => {
+    const messageId = req.params.messageId;
+    const userId = req.user.userId;
+
+    const deleteMessageQuery = 'DELETE FROM dms WHERE id = ? AND sender_id = ?';
+    db.query(deleteMessageQuery, [messageId, userId], (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (results.affectedRows === 0) {
+            return res.status(404).json({ error: 'Message not found or you are not the sender.' });
+        }
+        res.json({ message: 'Message deleted successfully.' });
     });
 });
 

@@ -73,6 +73,7 @@ function App() {
         const stored = localStorage.getItem('showMultiDevice');
         return stored !== null ? JSON.parse(stored) : true; // Default to true
     });
+    const [replyTo, setReplyTo] = useState(null);
     
     // Mobile-specific states
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -1012,6 +1013,7 @@ function App() {
                     imageUrl: imageUrls[0],
                     timestamp: new Date().toISOString(),
                     avatar: nickname,
+                    replyTo: replyTo ? { text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
                 };
 
                 console.log('Sending message with image:', newMessage);
@@ -1026,7 +1028,8 @@ function App() {
                 setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
 
                 setInput('');
-                setImageQueue([]); // Clear queue after sending
+                setImageQueue([]);
+                setReplyTo(null);
 
                 //Update messageList and sort by lastMessageTime
                 if (!selectedFriend.isSelf) {
@@ -1060,6 +1063,7 @@ function App() {
                         text: input.trim(),
                         timestamp: new Date().toISOString(),
                         avatar: nickname,
+                        replyTo: replyTo ? { text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
                     };
 
                     socket.emit('send_message', textMessage);
@@ -1094,7 +1098,8 @@ function App() {
                 });
 
                 setInput('');
-                setImageQueue([]); // Clear queue after sending
+                setImageQueue([]);
+                setReplyTo(null);
 
                 //Update messageList and sort by lastMessageTime
                 if (!selectedFriend.isSelf) {
@@ -1140,10 +1145,11 @@ function App() {
             const newMessage = {
                 senderId: userId,
                 receiverId: receiverId,
-                text: input.trim() || null, // Include text if there is any
+                text: input.trim() || null,
                 imageUrl: imageUrl,
                 timestamp: new Date().toISOString(),
                 avatar: nickname,
+                replyTo: replyTo ? { text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
             };
 
             console.log('Sending image message:', newMessage);
@@ -1157,7 +1163,8 @@ function App() {
 
             setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: nickname }]);
 
-            setInput(''); // Clear text input after sending
+            setInput('');
+            setReplyTo(null);
 
             //Update messageList to show latest messages with image indicator and sort
             if (!selectedFriend.isSelf) {
@@ -1205,6 +1212,24 @@ function App() {
             } catch (error) {
                 console.error('Error deleting DM history:', error);
             }
+        }
+    };
+
+    const handleDeleteMessage = async (message) => {
+        if (!message.id) {
+            console.error('Message ID is missing');
+            return;
+        }
+        try {
+            await axios.delete(
+                `${process.env.REACT_APP_SERVER_DOMAIN}/dm/message/${message.id}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setDms((prevDms) => prevDms.filter((dm) => dm.id !== message.id));
+            setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
+        } catch (error) {
+            console.error('Error deleting message:', error);
+            alert(error.response?.data?.error || t('toast.deleteError'));
         }
     };
 
@@ -1656,6 +1681,10 @@ function App() {
                                         imageQueue={imageQueue}
                                         onAddImageToQueue={addImageToQueue}
                                         onRemoveImageFromQueue={removeImageFromQueue}
+                                        replyTo={replyTo}
+                                        onCancelReply={() => setReplyTo(null)}
+                                        onReply={(message) => setReplyTo(message)}
+                                        onDeleteMessage={handleDeleteMessage}
                                     />
                                 </div>
                             )}
@@ -1767,6 +1796,8 @@ function App() {
                                             imageQueue={imageQueue}
                                             onAddImageToQueue={addImageToQueue}
                                             onRemoveImageFromQueue={removeImageFromQueue}
+                                            onReply={(message) => setReplyTo(message)}
+                                            onDeleteMessage={handleDeleteMessage}
                                         />
                                         <MessageInput
                                             input={input}
@@ -1777,6 +1808,8 @@ function App() {
                                             imageQueue={imageQueue}
                                             onAddImageToQueue={addImageToQueue}
                                             onRemoveImageFromQueue={removeImageFromQueue}
+                                            replyTo={replyTo}
+                                            onCancelReply={() => setReplyTo(null)}
                                         />
                                         {/* Emoji Panel for Desktop */}
                                         {!isMobile && (

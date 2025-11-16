@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleEmojiPanel, imageQueue = [], onAddImageToQueue, onRemoveImageFromQueue }) => {
+const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleEmojiPanel, imageQueue = [], onAddImageToQueue, onRemoveImageFromQueue, replyTo, onCancelReply }) => {
     const { t } = useTranslation();
     const fileInputRef = useRef(null);
     const inputRef = useRef(null);
@@ -113,6 +113,65 @@ const MessageInput = ({ input, onInputChange, onSendMessage, isMobile, onToggleE
 
     return (
         <div className={`chat-input ${isMobile ? 'mobile-chat-input' : ''}`}>
+            {replyTo && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: isMobile ? '60px' : '60px',
+                    left: isMobile ? '0' : '380px',
+                    right: '0',
+                    padding: '8px 10px',
+                    backgroundColor: 'rgba(248, 249, 250, 0.8)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    zIndex: isMobile ? 1101 : 1001
+                }}>
+                    <div style={{
+                        flex: 1,
+                        padding: '6px 10px',
+                        backgroundColor: 'rgba(76, 91, 111, 0.1)',
+                        borderRadius: '6px',
+                        borderLeft: '3px solid rgba(76, 91, 111, 0.5)',
+                        fontSize: '0.85rem',
+                        color: '#6c757d',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}>
+                        <i className="bi bi-reply" style={{ fontSize: '0.9rem', color: '#4C5B6F', flexShrink: 0 }}></i>
+                        <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {replyTo.imageUrl && <span>[Image]</span>}
+                            {replyTo.text && <span>{replyTo.text}</span>}
+                        </div>
+                    </div>
+                    <button
+                        onClick={onCancelReply}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '1.2rem',
+                            color: '#6c757d',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            transition: 'all 0.2s',
+                            flexShrink: 0
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+                            e.currentTarget.style.color = '#dc3545';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = '#6c757d';
+                        }}
+                        title="Cancel reply"
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
             {imageQueue.length > 0 && (
                 <div style={{
                     padding: '10px',
