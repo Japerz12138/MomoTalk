@@ -442,11 +442,15 @@ io.on('connection', (socket) => {
 
     socket.on('join_room', (userId) => {
         if (userId) {
-            onlineUsers.set(userId, socket.id); //Set socket to a user
+            onlineUsers.set(userId, socket.id);
             socket.join(userId.toString());
             console.log(`User ${userId} joined room`);
 
-            //Broadcast user online
+            // Update last_used_at when user comes online
+            db.query('UPDATE user_sessions SET last_used_at = NOW() WHERE user_id = ?', [userId], (err) => {
+                if (err) console.error('Error updating last_used_at on join:', err);
+            });
+
             notifyFriends(userId, true);
         }
     });
@@ -455,12 +459,44 @@ io.on('connection', (socket) => {
     socket.on('request_friends_status', (friendIds) => {
         if (!Array.isArray(friendIds)) return;
         
-        const statusUpdates = friendIds.map(friendId => ({
-            friendId: friendId,
-            isOnline: onlineUsers.has(friendId)
-        }));
+        const friendIdsStr = friendIds.join(',');
+        if (!friendIdsStr) return;
         
-        socket.emit('friends_status_response', statusUpdates);
+        const query = `
+            SELECT user_id, MAX(last_used_at) AS lastSeen 
+            FROM user_sessions 
+            WHERE user_id IN (${friendIds.map(() => '?').join(',')}) 
+            GROUP BY user_id
+        `;
+        
+        db.query(query, friendIds, (err, results) => {
+            if (err) {
+                console.error('Error fetching lastSeen:', err);
+                const statusUpdates = friendIds.map(friendId => ({
+                    friendId: friendId,
+                    isOnline: onlineUsers.has(friendId)
+                }));
+                socket.emit('friends_status_response', statusUpdates);
+                return;
+            }
+            
+            const lastSeenMap = new Map();
+            results.forEach(row => {
+                lastSeenMap.set(row.user_id, row.lastSeen);
+            });
+            
+            const statusUpdates = friendIds.map(friendId => {
+                const isOnline = onlineUsers.has(friendId);
+                const lastSeen = isOnline ? new Date().toISOString() : (lastSeenMap.get(friendId) || null);
+                return {
+                    friendId: friendId,
+                    isOnline: isOnline,
+                    lastSeen: lastSeen
+                };
+            });
+            
+            socket.emit('friends_status_response', statusUpdates);
+        });
     });
 
     socket.on('disconnect', () => {
@@ -481,7 +517,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_message', (data) => {
-        const { senderId, receiverId, text, imageUrl } = data;
+        const { senderId, receiverId, text, imageUrl, replyTo, clientId, isEmoji } = data;
 
         // Validate: must have senderId, receiverId, and at least text or imageUrl
         if (!senderId || !receiverId) {
@@ -515,37 +551,115 @@ io.on('connection', (socket) => {
         // Encrypt the message text before storing
         const encryptedText = hasText ? encryptMessage(textValue) : '';
 
-        const query = 'INSERT INTO dms (sender_id, receiver_id, text, image_url, message_type, timestamp) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP());';
-        db.query(query, [senderId, receiverId, encryptedText, hasImage ? imageUrl : null, messageType], (err) => {
-            if (!err) {
-                const userQuery = 'SELECT nickname, avatar FROM users WHERE id = ?';
-                db.query(userQuery, [senderId], (userErr, userResults) => {
-                    if (!userErr && userResults.length > 0) {
-                        const { nickname, avatar } = userResults[0];
-
-                        const emitData = {
-                            senderId,
-                            receiverId,
-                            text: hasText ? textValue : null,
-                            imageUrl: hasImage ? imageUrl : null,
-                            messageType,
-                            timestamp: new Date().toISOString(),
-                            nickname,
-                            avatar,
-                        };
-                        if (isSelfMessage) {
-                            io.to(senderId.toString()).emit('receive_message', emitData);
-                        } else {
-                            io.to(receiverId.toString()).emit('receive_message', emitData);
-                        }
+        // Handle replyTo: if replyTo has an id, use it; otherwise, extract reply info
+        let replyToId = null;
+        let replyToData = null;
+        if (replyTo) {
+            if (replyTo.id) {
+                replyToId = replyTo.id;
+            } else if (replyTo.senderId && (replyTo.text || replyTo.imageUrl)) {
+                // Find the message being replied to by matching sender, text/image, and recent timestamp
+                const findReplyQuery = `
+                    SELECT id FROM dms 
+                    WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
+                    AND (text = ? OR image_url = ?)
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                `;
+                const replyText = replyTo.text ? encryptMessage(replyTo.text.trim()) : '';
+                db.query(findReplyQuery, [
+                    replyTo.senderId, receiverId === replyTo.senderId ? senderId : receiverId,
+                    replyTo.senderId, receiverId === replyTo.senderId ? senderId : receiverId,
+                    replyText || null, replyTo.imageUrl || null
+                ], (findErr, findResults) => {
+                    if (!findErr && findResults.length > 0) {
+                        replyToId = findResults[0].id;
+                        insertMessage();
                     } else {
-                        console.error('Error fetching sender info:', userErr ? userErr.message : 'No user found');
+                        // If can't find, still save reply info as JSON
+                        replyToData = JSON.stringify(replyTo);
+                        insertMessage();
                     }
                 });
-            } else {
-                console.error('Error saving message:', err.message);
+                return;
             }
-        });
+        }
+
+        function insertMessage() {
+            const query = 'INSERT INTO dms (sender_id, receiver_id, text, image_url, message_type, reply_to_id, reply_to_data, is_emoji, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP());';
+            db.query(query, [senderId, receiverId, encryptedText, hasImage ? imageUrl : null, messageType, replyToId, replyToData, isEmoji ? 1 : 0], (err, insertResult) => {
+                if (!err) {
+                    const messageId = insertResult.insertId;
+                    const userQuery = 'SELECT nickname, avatar FROM users WHERE id = ?';
+                    db.query(userQuery, [senderId], (userErr, userResults) => {
+                        if (!userErr && userResults.length > 0) {
+                            const { nickname, avatar } = userResults[0];
+
+                            // Get replyTo info if it exists
+                            let finalReplyTo = null;
+                            if (replyToId) {
+                                const getReplyQuery = 'SELECT text, image_url, sender_id FROM dms WHERE id = ?';
+                                db.query(getReplyQuery, [replyToId], (replyErr, replyResults) => {
+                                    if (!replyErr && replyResults.length > 0) {
+                                        const replyMsg = replyResults[0];
+                                        finalReplyTo = {
+                                            id: replyToId,
+                                            text: replyMsg.text ? decryptMessage(replyMsg.text) : null,
+                                            imageUrl: replyMsg.image_url,
+                                            senderId: replyMsg.sender_id
+                                        };
+                                    }
+                                    emitMessage(finalReplyTo);
+                                });
+                            } else if (replyToData) {
+                                try {
+                                    finalReplyTo = JSON.parse(replyToData);
+                                } catch (e) {
+                                    finalReplyTo = null;
+                                }
+                                emitMessage(finalReplyTo);
+                            } else {
+                                emitMessage(null);
+                            }
+
+                            function emitMessage(replyToInfo) {
+                                const emitData = {
+                                    id: messageId,
+                                    senderId,
+                                    receiverId,
+                                    text: hasText ? textValue : null,
+                                    imageUrl: hasImage ? imageUrl : null,
+                                    messageType,
+                                    timestamp: new Date().toISOString(),
+                                    nickname,
+                                    avatar,
+                                    replyTo: replyToInfo,
+                                    clientId,
+                                    isEmoji: Boolean(isEmoji)
+                                };
+                                if (isSelfMessage) {
+                                    // Self-message: send to sender's all devices
+                                    io.to(senderId.toString()).emit('receive_message', emitData);
+                                } else {
+                                    // Regular message: send to receiver's all devices
+                                    io.to(receiverId.toString()).emit('receive_message', emitData);
+                                    // Also send to sender's other devices for multi-device sync (excluding the sending socket)
+                                    socket.to(senderId.toString()).emit('receive_message', emitData);
+                                }
+                            }
+                        } else {
+                            console.error('Error fetching sender info:', userErr ? userErr.message : 'No user found');
+                        }
+                    });
+                } else {
+                    console.error('Error saving message:', err.message);
+                }
+            });
+        }
+
+        if (!replyTo || replyTo.id) {
+            insertMessage();
+        }
     });
 
 
@@ -837,12 +951,52 @@ function notifyFriends(userId, isOnline) {
             return;
         }
 
-        console.log(`Notifying friends of user ${userId} (${isOnline ? 'online' : 'offline'})`);
+        const lastSeen = isOnline ? new Date().toISOString() : null;
+        
+        db.query('SELECT MAX(last_used_at) AS lastSeen FROM user_sessions WHERE user_id = ?', [userId], (err2, results) => {
+            if (!err2 && results[0] && results[0].lastSeen) {
+                const dbLastSeen = results[0].lastSeen;
+                const finalLastSeen = isOnline ? new Date().toISOString() : dbLastSeen;
+                
+                console.log(`Notifying friends of user ${userId} (${isOnline ? 'online' : 'offline'})`);
+                friends.forEach((friend) => {
+                    io.to(friend.id.toString()).emit('friend_status_update', {
+                        friendId: userId,
+                        isOnline,
+                        lastSeen: finalLastSeen
+                    });
+                });
+            } else {
+                console.log(`Notifying friends of user ${userId} (${isOnline ? 'online' : 'offline'})`);
+                friends.forEach((friend) => {
+                    io.to(friend.id.toString()).emit('friend_status_update', {
+                        friendId: userId,
+                        isOnline,
+                        lastSeen: lastSeen
+                    });
+                });
+            }
+        });
+    });
+}
+
+// Helper function to notify friends to refresh their friend list (when profile changes)
+function notifyFriendsToRefreshList(userId) {
+    const friendsQuery = `
+        SELECT friend_id AS id FROM friends WHERE user_id = ? AND status = 'accepted'
+        UNION
+        SELECT user_id AS id FROM friends WHERE friend_id = ? AND status = 'accepted'
+    `;
+    
+    db.query(friendsQuery, [userId, userId], (err, friends) => {
+        if (err) {
+            console.error('Error fetching friends for list refresh notification:', err.message);
+            return;
+        }
+
+        console.log(`Notifying friends to refresh list for user ${userId}`);
         friends.forEach((friend) => {
-            io.to(friend.id.toString()).emit('friend_status_update', {
-                friendId: userId,
-                isOnline
-            });
+            io.to(friend.id.toString()).emit('update_friend_list');
         });
     });
 }
@@ -898,7 +1052,8 @@ app.get('/friends', authenticateToken, (req, res) => {
                 FROM dms d
                 WHERE (d.sender_id = u.id AND d.receiver_id = ?)
                    OR (d.sender_id = ? AND d.receiver_id = u.id)
-                ORDER BY d.timestamp DESC LIMIT 1) AS imageUrl
+                ORDER BY d.timestamp DESC LIMIT 1) AS imageUrl,
+               (SELECT MAX(last_used_at) FROM user_sessions WHERE user_id = u.id) AS lastSeen
         FROM users u
                  JOIN friends f ON
             ((f.user_id = ? AND f.friend_id = u.id) OR (f.friend_id = ? AND f.user_id = u.id))
@@ -1119,6 +1274,28 @@ app.post('/upload/avatar', authenticateToken, upload.single('avatar'), async (re
         const updateQuery = 'UPDATE users SET avatar = ? WHERE id = ?';
         await db.promise().query(updateQuery, [avatarUrl, userId]);
 
+        // Fetch updated user data to broadcast to all devices
+        const [updatedUsers] = await db.promise().query(
+            'SELECT id, username, nickname, avatar, signature, birthday FROM users WHERE id = ?',
+            [userId]
+        );
+        
+        if (updatedUsers.length > 0) {
+            const updatedUser = updatedUsers[0];
+            // Broadcast profile update to all user's devices
+            io.to(userId.toString()).emit('profile_updated', {
+                userId: updatedUser.id,
+                username: updatedUser.username,
+                nickname: updatedUser.nickname,
+                avatar: updatedUser.avatar,
+                signature: updatedUser.signature,
+                birthday: updatedUser.birthday
+            });
+            
+            // Notify friends to refresh their friend list (avatar changed)
+            notifyFriendsToRefreshList(userId);
+        }
+
         res.json({ 
             message: 'Avatar uploaded successfully.',
             avatarUrl: avatarUrl,
@@ -1312,6 +1489,30 @@ app.post('/user/update', authenticateToken, async (req, res) => {
             params.push(userId);
             const updateQuery = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
             await db.promise().query(updateQuery, params);
+            
+            // Fetch updated user data to broadcast to all devices
+            const [updatedUsers] = await db.promise().query(
+                'SELECT id, username, nickname, avatar, signature, birthday FROM users WHERE id = ?',
+                [userId]
+            );
+            
+            if (updatedUsers.length > 0) {
+                const updatedUser = updatedUsers[0];
+                // Broadcast profile update to all user's devices
+                io.to(userId.toString()).emit('profile_updated', {
+                    userId: updatedUser.id,
+                    username: updatedUser.username,
+                    nickname: updatedUser.nickname,
+                    avatar: updatedUser.avatar,
+                    signature: updatedUser.signature,
+                    birthday: updatedUser.birthday
+                });
+                
+                // Also notify friends to refresh their friend list (for avatar/nickname changes)
+                if (nickname || avatar) {
+                    notifyFriendsToRefreshList(userId);
+                }
+            }
         }
 
         res.json({ message: 'Profile updated successfully.' });
@@ -1531,8 +1732,12 @@ app.get('/dm/:friendId', authenticateToken, (req, res) => {
         getDMQuery = `
             SELECT dms.id, dms.text, dms.image_url AS imageUrl, dms.message_type AS messageType, dms.timestamp,
                    dms.sender_id AS senderId, dms.receiver_id AS receiverId,
-                   (dms.sender_id = ?) AS self
+                   dms.reply_to_id AS replyToId, dms.reply_to_data AS replyToData,
+                   dms.is_emoji AS isEmoji,
+                   (dms.sender_id = ?) AS self,
+                   reply_msg.text AS replyText, reply_msg.image_url AS replyImageUrl, reply_msg.sender_id AS replySenderId
             FROM dms
+            LEFT JOIN dms AS reply_msg ON dms.reply_to_id = reply_msg.id
             WHERE ((dms.sender_id = ? AND dms.receiver_id = ?)
                OR (dms.sender_id = ? AND dms.receiver_id = ?))
                AND dms.id < ?
@@ -1545,8 +1750,12 @@ app.get('/dm/:friendId', authenticateToken, (req, res) => {
         getDMQuery = `
             SELECT dms.id, dms.text, dms.image_url AS imageUrl, dms.message_type AS messageType, dms.timestamp,
                    dms.sender_id AS senderId, dms.receiver_id AS receiverId,
-                   (dms.sender_id = ?) AS self
+                   dms.reply_to_id AS replyToId, dms.reply_to_data AS replyToData,
+                   dms.is_emoji AS isEmoji,
+                   (dms.sender_id = ?) AS self,
+                   reply_msg.text AS replyText, reply_msg.image_url AS replyImageUrl, reply_msg.sender_id AS replySenderId
             FROM dms
+            LEFT JOIN dms AS reply_msg ON dms.reply_to_id = reply_msg.id
             WHERE (dms.sender_id = ? AND dms.receiver_id = ?)
                OR (dms.sender_id = ? AND dms.receiver_id = ?)
             ORDER BY dms.timestamp DESC
@@ -1559,10 +1768,31 @@ app.get('/dm/:friendId', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         
         // Decrypt messages before sending to client
-        const decryptedResults = results.map(msg => ({
-            ...msg,
-            text: msg.text ? decryptMessage(msg.text) : null
-        }));
+        const decryptedResults = results.map(msg => {
+            const result = {
+                ...msg,
+                text: msg.text ? decryptMessage(msg.text) : null,
+                isEmoji: msg.isEmoji ? true : false // Convert TINYINT(1) to boolean
+            };
+            
+            // Handle replyTo
+            if (msg.replyToId && msg.replyText !== null) {
+                result.replyTo = {
+                    id: msg.replyToId,
+                    text: msg.replyText ? decryptMessage(msg.replyText) : null,
+                    imageUrl: msg.replyImageUrl,
+                    senderId: msg.replySenderId
+                };
+            } else if (msg.replyToData) {
+                try {
+                    result.replyTo = JSON.parse(msg.replyToData);
+                } catch (e) {
+                    result.replyTo = null;
+                }
+            }
+            
+            return result;
+        });
 
         // Reverse order if using cursor pagination (to show oldest first)
         const finalResults = before_id ? decryptedResults.reverse() : decryptedResults.reverse();

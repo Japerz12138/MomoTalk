@@ -49,9 +49,13 @@ CREATE TABLE dms (
                      text TEXT NOT NULL,
                      image_url VARCHAR(500) DEFAULT NULL,
                      message_type ENUM('text', 'image', 'both') DEFAULT 'text' AFTER image_url,
+                     reply_to_id INT DEFAULT NULL,
+                     reply_to_data TEXT DEFAULT NULL,
+                     is_emoji TINYINT(1) DEFAULT 0,
                      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                      FOREIGN KEY (sender_id) REFERENCES users(id),
-                     FOREIGN KEY (receiver_id) REFERENCES users(id)
+                     FOREIGN KEY (receiver_id) REFERENCES users(id),
+                     FOREIGN KEY (reply_to_id) REFERENCES dms(id) ON DELETE SET NULL
 );
 
 CREATE TABLE favorite_emojis (

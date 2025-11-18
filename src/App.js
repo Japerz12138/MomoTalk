@@ -60,6 +60,7 @@ function App() {
     const isRefreshingRef = useRef(false);
     const refreshQueueRef = useRef([]);
     const refreshClientRef = useRef(axios.create());
+    const processedMessagesRef = useRef(new Set()); // Track processed message IDs to prevent duplicate unread counts
     const [socketInstance, setSocket] = useState(null);
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [isAutoMode, setIsAutoMode] = useState(false);
@@ -74,6 +75,10 @@ function App() {
         return stored !== null ? JSON.parse(stored) : true; // Default to true
     });
     const [replyTo, setReplyTo] = useState(null);
+    // Track last message for "Other Device" (self-messages)
+    const [selfLastMessage, setSelfLastMessage] = useState(null);
+    const [selfLastMessageTime, setSelfLastMessageTime] = useState(null);
+    const [selfLastImageUrl, setSelfLastImageUrl] = useState(null);
     
     // Mobile-specific states
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -337,20 +342,21 @@ function App() {
             const currentSelectedFriend = selectedFriend;
             console.log('Received message:', message);
 
-            // Skip if this is a message we just sent
-            // Server should only send receive_message to receiver, but add check for safety
-            if (message.senderId === userId) {
-                console.log('Skipping own message from socket (already added optimistically)');
-                return;
-            }
+            // Check if this is a self-message (sender === receiver, multi-device sync)
+            const isSelfMessage = message.senderId === userId && message.receiverId === userId;
+            
+            // Note: We no longer skip messages sent by ourselves to others
+            // This is because for multi-device sync, other devices of the sender
+            // need to receive the message. The duplicate detection logic below
+            // will handle preventing duplicate messages on the device that sent it.
 
             //Check Local Storge notification settings
             const isInternalNotificationEnabled = JSON.parse(localStorage.getItem("internalNotificationEnabled")) || false;
 
             if ('Notification' in window && Notification.permission === 'granted' && isInternalNotificationEnabled) {
                 // Show appropriate notification text based on message type
-                const notificationBody = message.text || (message.imageUrl ? '[Image]' : 'New message');
-                const notification = new Notification(`New message from ${message.nickname || 'Unknown'}`, {
+                const notificationBody = message.text || (message.imageUrl ? '[Image]' : t('notification.newMessage'));
+                const notification = new Notification(`${t('notification.newMessageFrom')} ${message.nickname || 'Unknown'}`, {
                     body: notificationBody,
                     icon: message.avatar || DEFAULT_AVATAR,
                 });
@@ -378,74 +384,155 @@ function App() {
                     (!isSelfMessage && currentSelectedFriend.id === friendId)
                 );
                 
-                if (!isViewingThisFriend) {
-                    if (!isSelfMessage) {
-                        setUnreadMessagesCount((prev) => {
-                            const updated = {
-                                ...prev,
-                                [friendId]: (prev[friendId] || 0) + 1,
-                            };
-                            localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
-                            return updated;
-                        });
+                // Always update DMs if viewing this friend's chat, or if it's a self-message (for multi-device sync)
+                // Also update for regular messages from friends (even if we sent it - for multi-device sync)
+                const shouldUpdateDMs = isViewingThisFriend || isSelfMessage;
+                
+                // Generate a unique key for message to track if it's been processed
+                const messageKey = message.id ? `id_${message.id}` : 
+                                  message.clientId ? `client_${message.clientId}` :
+                                  `key_${message.timestamp}_${message.imageUrl || ''}_${message.text || ''}_${message.senderId}`;
+                
+                // Check if message already exists in messages to prevent duplicate unread count
+                let isNewMessage = true;
+                setMessages((prevMessages) => {
+                    // If message has id, check by id first (server message)
+                    if (message.id) {
+                        const existsById = prevMessages.some(msg => msg.id === message.id);
+                        if (existsById) {
+                            isNewMessage = false;
+                            // Update existing message with server data
+                            return prevMessages.map(msg => msg.id === message.id ? updatedMessage : msg)
+                                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                        }
                     }
-                } else {
+                    // If message has clientId, check by clientId 
+                    if (message.clientId) {
+                        const existsByClientId = prevMessages.some(msg => msg.clientId === message.clientId);
+                        if (existsByClientId) {
+                            isNewMessage = false;
+                            // Replace optimistic update with server message
+                            return prevMessages.map(msg => msg.clientId === message.clientId ? updatedMessage : msg)
+                                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                        }
+                    }
+                    // Fallback
+                    const msgKey = `${message.timestamp}_${message.imageUrl || ''}_${message.text || ''}_${message.senderId}`;
+                    const exists = prevMessages.some(msg => {
+                        if (msg.id || msg.clientId) return false;
+                        const existingMsgKey = `${msg.timestamp}_${msg.imageUrl || ''}_${msg.text || ''}_${msg.senderId}`;
+                        return existingMsgKey === msgKey;
+                    });
+                    if (exists) {
+                        isNewMessage = false;
+                        return prevMessages;
+                    }
+                    const updatedMessages = [...prevMessages, updatedMessage];
+                    return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                });
+                
+                if (shouldUpdateDMs) {
                     // Check for duplicates before adding
                     setDms((prevDms) => {
-                        // Check if message already exists (by timestamp + imageUrl/text + senderId)
-                        const messageKey = `${message.timestamp}_${message.imageUrl || ''}_${message.text || ''}_${message.senderId}`;
+                        // If message has id, check by id first (server message)
+                        if (message.id) {
+                            const existsById = prevDms.some(dm => dm.id === message.id);
+                            if (existsById) {
+                                // Update existing message with server data
+                                return prevDms.map(dm => dm.id === message.id ? updatedMessage : dm);
+                            }
+                        }
+                        // If message has clientId, check by clientId
+                        if (message.clientId) {
+                            const existsByClientId = prevDms.some(dm => dm.clientId === message.clientId);
+                            if (existsByClientId) {
+                                // Replace optimistic update with server message
+                                return prevDms.map(dm => dm.clientId === message.clientId ? updatedMessage : dm);
+                            }
+                        }
+                        // Fallback
+                        const dmKey = `${message.timestamp}_${message.imageUrl || ''}_${message.text || ''}_${message.senderId}`;
                         const exists = prevDms.some(dm => {
-                            const dmKey = `${dm.timestamp}_${dm.imageUrl || ''}_${dm.text || ''}_${dm.senderId}`;
-                            return dmKey === messageKey;
+                            if (dm.id || dm.clientId) return false; // Already handled above
+                            const existingDmKey = `${dm.timestamp}_${dm.imageUrl || ''}_${dm.text || ''}_${dm.senderId}`;
+                            return existingDmKey === dmKey;
                         });
                         if (exists) {
-                            console.log('Duplicate message detected, skipping');
                             return prevDms;
                         }
                         return [...prevDms, updatedMessage];
                     });
-                }
-
-                setMessages((prevMessages) => {
-                    // Check for duplicates before adding
-                    const messageKey = `${message.timestamp}_${message.imageUrl || ''}_${message.text || ''}_${message.senderId}`;
-                    const exists = prevMessages.some(msg => {
-                        const msgKey = `${msg.timestamp}_${msg.imageUrl || ''}_${msg.text || ''}_${msg.senderId}`;
-                        return msgKey === messageKey;
-                    });
-                    if (exists) {
-                        console.log('Duplicate message detected in messages, skipping');
-                        return prevMessages;
-                    }
-                    const updatedMessages = [...prevMessages, message];
-                    return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                });
-
-                // Update friend and move to top of list (sorted by lastMessageTime) - skip for self-messages
-                if (!isSelfMessage) {
-                    const updatedFriends = prevFriends.map((friend) =>
-                        friend.id === friendId
-                            ? {
-                                ...friend,
-                                lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
-                                lastMessageTime: message.timestamp,
-                                imageUrl: message.imageUrl,
-                                avatar: senderFriend ? senderFriend.avatar : friend.avatar,
+                } else {
+                    // Not viewing this friend's chat - increment unread count only for new regular messages
+                    if (!isSelfMessage && isNewMessage) {
+                        // Check if we already processed this message
+                        if (!processedMessagesRef.current.has(messageKey)) {
+                            processedMessagesRef.current.add(messageKey);
+                            // Clean up old entries
+                            if (processedMessagesRef.current.size > 1000) {
+                                const entries = Array.from(processedMessagesRef.current);
+                                processedMessagesRef.current = new Set(entries.slice(-500));
                             }
-                            : friend
-                    );
-
-                    // Sort friends: online first, then by lastMessageTime (most recent first)
-                    return updatedFriends.sort((a, b) => {
-                        if (a.isOnline !== b.isOnline) {
-                            return b.isOnline ? 1 : -1; // Online users first
+                            
+                            setUnreadMessagesCount((prev) => {
+                                const updated = {
+                                    ...prev,
+                                    [friendId]: (prev[friendId] || 0) + 1,
+                                };
+                                localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
+                                return updated;
+                            });
                         }
-                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
-                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
-                        return timeB - timeA; // Descending order (newest first)
-                    });
+                    }
                 }
-                return prevFriends;
+
+                // Update friend and move to top of list (sorted by lastMessageTime)
+                // For self-messages, we also want to update if viewing "Other Device"
+                const updatedFriends = prevFriends.map((friend) => {
+                    // For self-messages, check if friend has isSelf flag or id matches userId
+                    if (isSelfMessage && (friend.isSelf || friend.id === userId)) {
+                        // Also update self message state for message list preview
+                        setSelfLastMessage(message.text || (message.imageUrl ? '[Image]' : ''));
+                        setSelfLastMessageTime(message.timestamp);
+                        setSelfLastImageUrl(message.imageUrl || null);
+                        
+                        return {
+                            ...friend,
+                            lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
+                            lastMessageTime: message.timestamp,
+                            imageUrl: message.imageUrl,
+                            avatar: avatar || DEFAULT_AVATAR,
+                        };
+                    }
+                    // For regular messages
+                    if (!isSelfMessage && friend.id === friendId) {
+                        return {
+                            ...friend,
+                            lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
+                            lastMessageTime: message.timestamp,
+                            imageUrl: message.imageUrl,
+                            avatar: senderFriend ? senderFriend.avatar : friend.avatar,
+                        };
+                    }
+                    return friend;
+                });
+                
+                // Also update self message state for self-messages (even if not in friends list)
+                if (isSelfMessage) {
+                    setSelfLastMessage(message.text || (message.imageUrl ? '[Image]' : ''));
+                    setSelfLastMessageTime(message.timestamp);
+                    setSelfLastImageUrl(message.imageUrl || null);
+                }
+
+                // Sort friends: online first, then by lastMessageTime (most recent first)
+                return updatedFriends.sort((a, b) => {
+                    if (a.isOnline !== b.isOnline) {
+                        return b.isOnline ? 1 : -1; // Online users first
+                    }
+                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                    return timeB - timeA; // Descending order (newest first)
+                });
             });
         };
 
@@ -479,32 +566,64 @@ function App() {
             fetchFriendRequests();
         });
 
+        // Handle profile updates from other devices
+        socket.on('profile_updated', (updatedProfile) => {
+            console.log('Received profile_updated event:', updatedProfile);
+            // Only update if this is the current user's profile
+            if (updatedProfile.userId === userId) {
+                // Update local state
+                if (updatedProfile.nickname !== undefined) {
+                    setNickname(updatedProfile.nickname);
+                    localStorage.setItem('nickname', updatedProfile.nickname);
+                }
+                if (updatedProfile.signature !== undefined) {
+                    setSignature(updatedProfile.signature || '');
+                    localStorage.setItem('signature', updatedProfile.signature || '');
+                }
+                if (updatedProfile.avatar !== undefined) {
+                    setAvatar(updatedProfile.avatar || DEFAULT_AVATAR);
+                    localStorage.setItem('avatar', updatedProfile.avatar || DEFAULT_AVATAR);
+                }
+                if (updatedProfile.birthday !== undefined) {
+                    setBirthday(updatedProfile.birthday || '');
+                    localStorage.setItem('birthday', updatedProfile.birthday || '');
+                }
+                
+                // Refresh friends list to update avatar/nickname in friend list
+                fetchFriends();
+            }
+        });
+
         return () => {
             socket.off('receive_friend_request');
             socket.off('friend_request_responded');
             socket.off('update_friend_list');
+            socket.off('profile_updated');
         };
-    }, [fetchFriendRequests, fetchFriends]);
+    }, [fetchFriendRequests, fetchFriends, userId]);
 
     //User online status
     useEffect(() => {
-        socket.on('friend_status_update', ({ friendId, isOnline }) => {
+        socket.on('friend_status_update', ({ friendId, isOnline, lastSeen }) => {
             setFriends((prevFriends) => {
                 const updated = prevFriends.map((friend) =>
-                    friend.id === friendId && friend.isOnline !== isOnline //Prevent Loop respones
-                        ? { ...friend, isOnline }
+                    friend.id === friendId && friend.isOnline !== isOnline
+                        ? { ...friend, isOnline, lastSeen: lastSeen || friend.lastSeen }
                         : friend
                 );
-                // Sort friends: online first, then by lastMessageTime
                 return updated.sort((a, b) => {
                     if (a.isOnline !== b.isOnline) {
-                        return b.isOnline ? 1 : -1; // Online users first
+                        return b.isOnline ? 1 : -1;
                     }
                     const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
                     const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
                     return timeB - timeA;
                 });
             });
+            
+            if (selectedFriend && selectedFriend.id === friendId) {
+                setSelectedFriend(prev => ({ ...prev, isOnline, lastSeen: lastSeen || prev.lastSeen }));
+            }
         });
 
         // Handle batch status updates
@@ -512,17 +631,22 @@ function App() {
             setFriends((prevFriends) => {
                 const updated = prevFriends.map((friend) => {
                     const update = statusUpdates.find(s => s.friendId === friend.id);
-                    return update ? { ...friend, isOnline: update.isOnline } : friend;
+                    return update ? { ...friend, isOnline: update.isOnline, lastSeen: update.lastSeen || friend.lastSeen } : friend;
                 });
-                // Sort friends: online first, then by lastMessageTime
                 return updated.sort((a, b) => {
                     if (a.isOnline !== b.isOnline) {
-                        return b.isOnline ? 1 : -1; // Online users first
+                        return b.isOnline ? 1 : -1;
                     }
                     const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
                     const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
                     return timeB - timeA;
                 });
+            });
+            
+            setSelectedFriend(prev => {
+                if (!prev) return prev;
+                const update = statusUpdates.find(s => s.friendId === prev.id);
+                return update ? { ...prev, isOnline: update.isOnline, lastSeen: update.lastSeen || prev.lastSeen } : prev;
             });
         });
 
@@ -851,6 +975,14 @@ function App() {
                     avatar: avatar || DEFAULT_AVATAR,
                 }));
                 setDms(messagesWithAvatar);
+                
+                // Update self message state with last message from history
+                if (messagesWithAvatar.length > 0) {
+                    const lastMessage = messagesWithAvatar[messagesWithAvatar.length - 1];
+                    setSelfLastMessage(lastMessage.text || (lastMessage.imageUrl ? '[Image]' : ''));
+                    setSelfLastMessageTime(lastMessage.timestamp);
+                    setSelfLastImageUrl(lastMessage.imageUrl || null);
+                }
             } catch (error) {
                 if (error.response?.status === 401) {
                     console.error('Unauthorized! Clearing token.');
@@ -1006,6 +1138,7 @@ function App() {
             // If multiple images, send them separately; if single image or text+image, send together
             if (hasImages && hasImages.length === 1 && hasText) {
                 // Single image with text - send together
+                const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                 const newMessage = {
                     senderId: userId,
                     receiverId: receiverId,
@@ -1013,7 +1146,8 @@ function App() {
                     imageUrl: imageUrls[0],
                     timestamp: new Date().toISOString(),
                     avatar: nickname,
-                    replyTo: replyTo ? { text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                    replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                    clientId
                 };
 
                 console.log('Sending message with image:', newMessage);
@@ -1031,39 +1165,119 @@ function App() {
                 setImageQueue([]);
                 setReplyTo(null);
 
-                //Update messageList and sort by lastMessageTime
-                if (!selectedFriend.isSelf) {
-                    setFriends((prevFriends) => {
-                        const updated = prevFriends.map((friend) =>
-                            friend.id === selectedFriend.id
-                                ? {
-                                    ...friend,
-                                    lastMessage: newMessage.text || '[Image]',
-                                    lastMessageTime: newMessage.timestamp,
-                                }
-                                : friend
-                        );
-                        // Sort: online first, then by lastMessageTime (most recent first)
-                        return updated.sort((a, b) => {
-                            if (a.isOnline !== b.isOnline) {
-                                return b.isOnline ? 1 : -1; // Online users first
-                            }
-                            const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
-                            const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
-                            return timeB - timeA;
-                        });
-                    });
+                //Update messageList and sort by lastMessageTime (including self-messages for "Other Device")
+                // Update self message state if sending to self
+                if (selectedFriend.isSelf) {
+                    setSelfLastMessage(newMessage.text || '[Image]');
+                    setSelfLastMessageTime(newMessage.timestamp);
+                    setSelfLastImageUrl(newMessage.imageUrl || null);
                 }
+                
+                setFriends((prevFriends) => {
+                    const updated = prevFriends.map((friend) => {
+                        // For self-messages, update if friend has isSelf flag or id matches userId
+                        if (selectedFriend.isSelf && (friend.isSelf || friend.id === userId)) {
+                            return {
+                                ...friend,
+                                lastMessage: newMessage.text || '[Image]',
+                                lastMessageTime: newMessage.timestamp,
+                                imageUrl: newMessage.imageUrl || null,
+                            };
+                        }
+                        // For regular messages
+                        if (!selectedFriend.isSelf && friend.id === selectedFriend.id) {
+                            return {
+                                ...friend,
+                                lastMessage: newMessage.text || '[Image]',
+                                lastMessageTime: newMessage.timestamp,
+                                imageUrl: newMessage.imageUrl || null,
+                            };
+                        }
+                        return friend;
+                    });
+                    // Sort: online first, then by lastMessageTime (most recent first)
+                    return updated.sort((a, b) => {
+                        if (a.isOnline !== b.isOnline) {
+                            return b.isOnline ? 1 : -1; // Online users first
+                        }
+                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                        return timeB - timeA;
+                    });
+                });
+            } else if (hasText && !hasImages) {
+                // Pure text message (no images)
+                const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const textMessage = {
+                    senderId: userId,
+                    receiverId: receiverId,
+                    text: input.trim(),
+                    timestamp: new Date().toISOString(),
+                    avatar: nickname,
+                    replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                    clientId
+                };
+
+                socket.emit('send_message', textMessage);
+
+                setMessages((prevMessages) => {
+                    const updatedMessages = [...prevMessages, { ...textMessage, self: true }];
+                    return updatedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                });
+
+                setDms((prevDms) => [...prevDms, { ...textMessage, self: true, avatar: nickname }]);
+
+                setInput('');
+                setImageQueue([]);
+                setReplyTo(null);
+
+                // Update self message state if sending to self
+                if (selectedFriend.isSelf) {
+                    setSelfLastMessage(textMessage.text);
+                    setSelfLastMessageTime(textMessage.timestamp);
+                    setSelfLastImageUrl(null);
+                }
+                
+                setFriends((prevFriends) => {
+                    const updated = prevFriends.map((friend) => {
+                        if (selectedFriend.isSelf && (friend.isSelf || friend.id === userId)) {
+                            return {
+                                ...friend,
+                                lastMessage: textMessage.text,
+                                lastMessageTime: textMessage.timestamp,
+                                imageUrl: null,
+                            };
+                        }
+                        if (!selectedFriend.isSelf && friend.id === selectedFriend.id) {
+                            return {
+                                ...friend,
+                                lastMessage: textMessage.text,
+                                lastMessageTime: textMessage.timestamp,
+                            };
+                        }
+                        return friend;
+                    });
+                    return updated.sort((a, b) => {
+                        if (a.isOnline !== b.isOnline) {
+                            return b.isOnline ? 1 : -1;
+                        }
+                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                        return timeB - timeA;
+                    });
+                });
             } else {
                 // Multiple images or images only - send text first (if any), then images
                 if (hasText) {
+                    const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                     const textMessage = {
                         senderId: userId,
                         receiverId: receiverId,
                         text: input.trim(),
                         timestamp: new Date().toISOString(),
                         avatar: nickname,
-                        replyTo: replyTo ? { text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                        replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                        clientId
                     };
 
                     socket.emit('send_message', textMessage);
@@ -1078,6 +1292,7 @@ function App() {
 
                 // Send each image as separate message
                 imageUrls.forEach((imageUrl, index) => {
+                    const clientId = `client_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
                     const imageMessage = {
                         senderId: userId,
                         receiverId: receiverId,
@@ -1085,6 +1300,7 @@ function App() {
                         imageUrl: imageUrl,
                         timestamp: new Date(Date.now() + index).toISOString(), // Slight delay to maintain order
                         avatar: nickname,
+                        clientId
                     };
 
                     socket.emit('send_message', imageMessage);
@@ -1101,36 +1317,55 @@ function App() {
                 setImageQueue([]);
                 setReplyTo(null);
 
-                //Update messageList and sort by lastMessageTime
-                if (!selectedFriend.isSelf) {
-                    const lastMessage = hasText ? input.trim() : '[Image]';
-                    setFriends((prevFriends) => {
-                        const updated = prevFriends.map((friend) =>
-                            friend.id === selectedFriend.id
-                                ? {
-                                    ...friend,
-                                    lastMessage: lastMessage,
-                                    lastMessageTime: new Date().toISOString(),
-                                }
-                                : friend
-                        );
-                        // Sort: online first, then by lastMessageTime (most recent first)
-                        return updated.sort((a, b) => {
-                            if (a.isOnline !== b.isOnline) {
-                                return b.isOnline ? 1 : -1; // Online users first
-                            }
-                            const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
-                            const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
-                            return timeB - timeA;
-                        });
-                    });
+                //Update messageList and sort by lastMessageTime (including self-messages for "Other Device")
+                const lastMessage = hasText ? input.trim() : '[Image]';
+                const lastImageUrl = imageUrls && imageUrls.length > 0 ? imageUrls[0] : null;
+                const currentTime = new Date().toISOString();
+                
+                // Update self message state if sending to self
+                if (selectedFriend.isSelf) {
+                    setSelfLastMessage(lastMessage);
+                    setSelfLastMessageTime(currentTime);
+                    setSelfLastImageUrl(lastImageUrl);
                 }
+                
+                setFriends((prevFriends) => {
+                    const updated = prevFriends.map((friend) => {
+                        // For self-messages, update if friend has isSelf flag or id matches userId
+                        if (selectedFriend.isSelf && (friend.isSelf || friend.id === userId)) {
+                            return {
+                                ...friend,
+                                lastMessage: lastMessage,
+                                lastMessageTime: currentTime,
+                                imageUrl: lastImageUrl,
+                            };
+                        }
+                        // For regular messages
+                        if (!selectedFriend.isSelf && friend.id === selectedFriend.id) {
+                            return {
+                                ...friend,
+                                lastMessage: lastMessage,
+                                lastMessageTime: currentTime,
+                            };
+                        }
+                        return friend;
+                    });
+                    // Sort: online first, then by lastMessageTime (most recent first)
+                    return updated.sort((a, b) => {
+                        if (a.isOnline !== b.isOnline) {
+                            return b.isOnline ? 1 : -1; // Online users first
+                        }
+                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
+                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
+                        return timeB - timeA;
+                    });
+                });
             }
         }
     };
 
     // Used for emoji panel - sends immediately (not queued)
-    const handleImageUpload = (imageUrl) => {
+    const handleImageUpload = (imageUrl, isEmoji = false) => {
         // Ensure socket is connected before sending
         if (!socket.connected) {
             console.warn('Socket not connected, attempting to reconnect...');
@@ -1142,6 +1377,7 @@ function App() {
         
         if (imageUrl && selectedFriend) {
             const receiverId = selectedFriend.isSelf ? userId : selectedFriend.id;
+            const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const newMessage = {
                 senderId: userId,
                 receiverId: receiverId,
@@ -1149,7 +1385,9 @@ function App() {
                 imageUrl: imageUrl,
                 timestamp: new Date().toISOString(),
                 avatar: nickname,
-                replyTo: replyTo ? { text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                clientId,
+                isEmoji: isEmoji
             };
 
             console.log('Sending image message:', newMessage);
@@ -1166,19 +1404,36 @@ function App() {
             setInput('');
             setReplyTo(null);
 
-            //Update messageList to show latest messages with image indicator and sort
-            if (!selectedFriend.isSelf) {
+                //Update messageList to show latest messages with image indicator and sort (including self-messages for "Other Device")
+                // Update self message state if sending to self
+                if (selectedFriend.isSelf) {
+                    setSelfLastMessage(newMessage.text || '[Image]');
+                    setSelfLastMessageTime(newMessage.timestamp);
+                    setSelfLastImageUrl(imageUrl || null);
+                }
+                
                 setFriends((prevFriends) => {
-                    const updated = prevFriends.map((friend) =>
-                        friend.id === selectedFriend.id
-                            ? {
+                    const updated = prevFriends.map((friend) => {
+                        // For self-messages, update if friend has isSelf flag or id matches userId
+                        if (selectedFriend.isSelf && (friend.isSelf || friend.id === userId)) {
+                            return {
                                 ...friend,
                                 lastMessage: newMessage.text || '[Image]',
                                 lastMessageTime: newMessage.timestamp,
                                 imageUrl: imageUrl,
-                            }
-                            : friend
-                    );
+                            };
+                        }
+                        // For regular messages
+                        if (!selectedFriend.isSelf && friend.id === selectedFriend.id) {
+                            return {
+                                ...friend,
+                                lastMessage: newMessage.text || '[Image]',
+                                lastMessageTime: newMessage.timestamp,
+                                imageUrl: imageUrl,
+                            };
+                        }
+                        return friend;
+                    });
                     // Sort by lastMessageTime (most recent first)
                     return updated.sort((a, b) => {
                         const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
@@ -1186,7 +1441,6 @@ function App() {
                         return timeB - timeA;
                     });
                 });
-            }
         }
     };
 
@@ -1195,8 +1449,8 @@ function App() {
     };
 
     const handleSelectEmoji = (imageUrl) => {
-        // Send the emoji as an image message
-        handleImageUpload(imageUrl);
+        // Send the emoji as an image message with isEmoji flag
+        handleImageUpload(imageUrl, true);
     };
 
     const handleDeleteDMs = async () => {
@@ -1489,9 +1743,9 @@ function App() {
                                                     id: userId,
                                                     username: username,
                                                     nickname: t('friendList.multiDevice'),
-                                                    text: null,
-                                                    imageUrl: null,
-                                                    timestamp: null,
+                                                    text: selfLastMessage || null,
+                                                    imageUrl: selfLastImageUrl || null,
+                                                    timestamp: selfLastMessageTime || null,
                                                     avatar: avatar,
                                                     isOnline: false,
                                                     isSelf: true,
@@ -1718,9 +1972,9 @@ function App() {
                                                 id: userId,
                                                 username: username,
                                                 nickname: t('friendList.multiDevice'),
-                                                text: null,
-                                                imageUrl: null,
-                                                timestamp: null,
+                                                text: selfLastMessage || null,
+                                                imageUrl: selfLastImageUrl || null,
+                                                timestamp: selfLastMessageTime || null,
                                                 avatar: avatar,
                                                 isOnline: false,
                                                 isSelf: true,

@@ -26,11 +26,17 @@
     "passwordError": "Password must be at least 8 characters long and contain at least one uppercase letter.",
     "passwordMismatch": "Passwords do not match."
   },
+  "notification": {
+    "newMessage": "New message",
+    "newMessageFrom": "New message from "
+  },
   "chat": {
     "noMessagesYet": "No messages yet.",
     "maybeStartWithAHi": "Maybe start with a \"Hi\"?",
     "chatWith": "Chat with {{currentChat}}",
-    "startAConversation": "Start a conversation with {{currentChat}}"
+    "startAConversation": "Start a conversation with {{currentChat}}",
+    "reply": "Reply",
+    "withdraw": "Recall"
   },
   "messageInput": {
     "uploadImage": "Upload Image",
@@ -61,7 +67,7 @@
     "enableNotificationsCheckSettings": "Enable Notifications (Check Settings)",
     "notificationsDenied": "Notifications are denied. Please enable them in your browser settings.",
     "about": "About",
-    "version": "Version: 1.2.1",
+    "version": "Version: 1.2.3",
     "welcome": "Welcome to MomoTalk! This is NYIT CSCI 621 - Programming Languages Final Project!",
     "professor": "Professor: Khalid Mirza",
     "github": "Github: Japerz12138",
@@ -174,7 +180,15 @@
     "clearChatHistory": "Clear Chat History",
     "confirmClearChat": "Confirm Clear Chat History",
     "sureClearChat": "Are you sure you want to clear chat history?",
-    "clear": "Clear"
+    "clear": "Clear",
+    "justNow": "Just now",
+    "minutesAgo": "minutes ago",
+    "hoursAgo": "hours ago",
+    "daysAgo": "days ago",
+    "monthsAgo": "months ago",
+    "online": "Online",
+    "lastSeen": "Last seen:",
+    "yearsAgo": "years ago"
   },
   "months": {
     "january": "January",

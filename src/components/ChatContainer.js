@@ -387,7 +387,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                                     alt="chat" 
                                                     style={{ 
                                                         maxWidth: '100%',
-                                                        maxHeight: '300px',
+                                                        maxHeight: message.isEmoji === true ? '120px' : '300px',
                                                         width: 'auto',
                                                         height: 'auto',
                                                         borderRadius: '8px',
@@ -578,7 +578,8 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                 setContextMenu(null);
                             }}
                         >
-                            <i className="bi bi-reply me-2"></i>回复
+                            <i className="bi bi-reply me-2"></i>
+                            {t('chat.reply')}
                         </button>
                     )}
                     {contextMenu.message.self && onDeleteMessage && (
@@ -589,7 +590,8 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                 setContextMenu(null);
                             }}
                         >
-                            <i className="bi bi-backspace-reverse me-2"></i>撤回
+                            <i className="bi bi-backspace-reverse me-2"></i>
+                            {t('chat.withdraw')}
                         </button>
                     )}
                 </div>

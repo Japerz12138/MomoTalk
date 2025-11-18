@@ -26,11 +26,17 @@
     "passwordError": "密码必须至少8个字符，且包含至少一个大写字母。",
     "passwordMismatch": "密码不匹配。"
   },
+  "notification": {
+    "newMessage": "新消息",
+    "newMessageFrom": "来自 "
+  },
   "chat": {
     "noMessagesYet": "还没有消息。",
     "maybeStartWithAHi": "要不要打个招呼？",
     "chatWith": "与 {{currentChat}} 聊天",
-    "selectAConversation": "选择一个对话"
+    "selectAConversation": "选择一个对话",
+    "reply": "回复",
+    "withdraw": "撤回"
   },
   "messageInput": {
     "uploadImage": "上传图片",
@@ -61,7 +67,7 @@
     "enableNotificationsCheckSettings": "启用通知（检查设置）",
     "notificationsDenied": "通知已被拒绝。请在浏览器设置中启用。",
     "about": "关于",
-    "version": "版本: 1.2.1",
+    "version": "版本: 1.2.3",
     "welcome": "欢迎使用 MomoTalk 桃信！这是纽约理工学院 CSCI 621 - 编程语言 期末项目的后续开发！",
     "professor": "教授: Khalid Mirza",
     "github": "Github: Japerz12138",
@@ -174,7 +180,15 @@
     "clearChatHistory": "清空聊天记录",
     "confirmClearChat": "确认清空聊天记录",
     "sureClearChat": "您确定要清空聊天记录吗？",
-    "clear": "清空"
+    "clear": "清空",
+    "justNow": "刚刚在线",
+    "minutesAgo": "分钟前",
+    "hoursAgo": "小时前",
+    "daysAgo": "天前",
+    "monthsAgo": "个月前",
+    "online": "在线",
+    "lastSeen": "最后在线：",
+    "yearsAgo": "年前"
   },
   "months": {
     "january": "1月",

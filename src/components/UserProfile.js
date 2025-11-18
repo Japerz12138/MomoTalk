@@ -106,6 +106,22 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
         return `${monthName} ${dayNum}${daySuffix}`;
     };
 
+    const formatLastSeen = (lastSeen, isOnline) => {
+        if (isOnline) return t('profile.online');
+        if (!lastSeen) return null;
+        const now = new Date();
+        const lastSeenDate = new Date(lastSeen);
+        const diffMs = now - lastSeenDate;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        if (diffMins < 1) return `${t('profile.lastSeen')} ${t('profile.justNow')}`;
+        if (diffMins < 60) return `${t('profile.lastSeen')} ${diffMins}${t('profile.minutesAgo')}`;
+        if (diffHours < 24) return `${t('profile.lastSeen')} ${diffHours}${t('profile.hoursAgo')}`;
+        if (diffDays < 7) return `${t('profile.lastSeen')} ${diffDays}${t('profile.daysAgo')}`;
+        return lastSeenDate.toLocaleDateString(i18n.language);
+    };
+
     return (
         <div className={isMobile ? '' : 'container mt-4'} style={{ paddingTop: isMobile ? '0' : 'inherit', margin: isMobile ? '0' : 'auto', padding: isMobile ? '0' : 'inherit' }}>
             {/* Mobile header */}
@@ -139,9 +155,21 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                 marginTop: isMobile ? '16px' : 'var(--header-height, 69px)', 
                 marginLeft: isMobile ? '16px' : 'auto',
                 marginRight: isMobile ? '16px' : 'auto',
-                border: 'none' 
+                border: 'none',
+                position: 'relative'
             }}>
-                <div className="card-body text-center">
+                <div className="card-body text-center" style={{ position: 'relative' }}>
+                    {!isOwnProfile && (
+                        <div style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            fontSize: '0.75rem',
+                            color: user.isOnline ? '#28a745' : '#6c757d'
+                        }}>
+                            {formatLastSeen(user.lastSeen, user.isOnline)}
+                        </div>
+                    )}
                     <div style={{ position: 'relative', display: 'inline-block' }}>
                         <img
                             src={getFullImageUrl(user.avatar || DEFAULT_AVATAR)}
