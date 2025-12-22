@@ -566,8 +566,10 @@ function App() {
             const updatedMessage = {
                 ...message,
                 self: message.senderId === userId,
+                avatar: message.avatar || DEFAULT_AVATAR,
             };
 
+            //for real time display
             if (isViewingThisGroup) {
                 setDms((prevDms) => {
                     if (message.id) {
@@ -582,10 +584,12 @@ function App() {
                             return prevDms.map(dm => dm.clientId === message.clientId ? updatedMessage : dm);
                         }
                     }
+                    // New message, add it
                     return [...prevDms, updatedMessage];
                 });
             }
 
+            // Always update groups list with last message
             setGroups((prevGroups) => {
                 return prevGroups.map((group) => {
                     if (group.id === message.groupId) {
@@ -1037,6 +1041,10 @@ function App() {
             });
             handleShowToast(t('toast.success'), '群组创建成功');
             fetchGroups();
+            // Rejoin socket room to include the new group
+            if (socket && socket.connected && userId) {
+                socket.emit('join_room', userId);
+            }
         } catch (error) {
             console.error('Error creating group:', error.response?.data?.error || error);
             handleShowToast(t('toast.error'), error.response?.data?.error || '创建群组失败');
@@ -1050,6 +1058,10 @@ function App() {
             });
             handleShowToast(t('toast.success'), '加入群组成功');
             fetchGroups();
+            // Rejoin socket room to include the new group
+            if (socket && socket.connected && userId) {
+                socket.emit('join_room', userId);
+            }
         } catch (error) {
             console.error('Error joining group:', error.response?.data?.error || error);
             handleShowToast(t('toast.error'), error.response?.data?.error || '加入群组失败');
@@ -1267,6 +1279,7 @@ function App() {
                     groupId: groupId,
                     text: input.trim(),
                     imageUrl: imageUrls[0],
+                    timestamp: new Date().toISOString(),
                     replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
                     clientId
                 };
@@ -1294,6 +1307,7 @@ function App() {
                     senderId: userId,
                     groupId: groupId,
                     text: input.trim(),
+                    timestamp: new Date().toISOString(),
                     replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
                     clientId
                 };
@@ -1321,6 +1335,7 @@ function App() {
                         senderId: userId,
                         groupId: groupId,
                         text: input.trim(),
+                        timestamp: new Date().toISOString(),
                         replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
                         clientId
                     };
@@ -1333,6 +1348,7 @@ function App() {
                         senderId: userId,
                         groupId: groupId,
                         imageUrl: imageUrl,
+                        timestamp: new Date().toISOString(),
                         replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
                         clientId
                     };
