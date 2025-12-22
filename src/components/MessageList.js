@@ -3,14 +3,22 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
 
-function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
+function MessageList({ messages, groups = [], onSelectMessage, onSelectGroup, unreadMessagesCount }) {
     const { t } = useTranslation();
     const [selectedMessageId, setSelectedMessageId] = useState(null);
+    const [selectedGroupId, setSelectedGroupId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
     const handleSelectMessage = (msg) => {
         setSelectedMessageId(msg.id);
+        setSelectedGroupId(null);
         onSelectMessage(msg);
+    };
+
+    const handleSelectGroup = (group) => {
+        setSelectedGroupId(group.id);
+        setSelectedMessageId(null);
+        if (onSelectGroup) onSelectGroup(group);
     };
 
     const formatDate = (timestamp) => {
@@ -38,7 +46,14 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
         return timeB - timeA; // Most recent first
     });
 
-    // Filter messages based on search query
+    //Sort groups by last message time
+    const sortedGroups = [...groups].sort((a, b) => {
+        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+        return timeB - timeA;
+    });
+
+    // Filter messages and groups based on search query
     const filteredMessages = sortedMessages.filter((msg) => {
         const query = searchQuery.toLowerCase().trim();
         if (!query) return true;
@@ -48,6 +63,13 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
         const text = (msg.text || '').toLowerCase();
         
         return nickname.includes(query) || username.includes(query) || text.includes(query);
+    });
+
+    const filteredGroups = sortedGroups.filter((group) => {
+        const query = searchQuery.toLowerCase().trim();
+        if (!query) return true;
+        const name = (group.name || '').toLowerCase();
+        return name.includes(query);
     });
 
     return (
@@ -79,8 +101,70 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                 </div>
             </div>
 
-            {/* Messages list */}
+            {/* Messages and groups list */}
             <div className="list-group" style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+                {/* Groups */}
+                {filteredGroups.map((group) => (
+                    <div
+                        key={`group_${group.id}`}
+                        className={`list-group-item d-flex align-items-center ${
+                            group.id === selectedGroupId ? 'active' : ''
+                        }`}
+                        onClick={() => handleSelectGroup(group)}
+                        style={{ 
+                            cursor: 'pointer',
+                            borderLeft: group.id === selectedGroupId ? '3px solid #4C5B6F' : undefined
+                        }}
+                    >
+                        <div style={{ 
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            backgroundColor: '#e9ecef',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: '12px',
+                            flexShrink: 0
+                        }}>
+                            <i className="bi bi-people" style={{ fontSize: '18px', color: '#6c757d' }}></i>
+                        </div>
+                        <div className="flex-grow-1" style={{ minWidth: 0, overflow: 'hidden' }}>
+                            <div className="d-flex justify-content-between align-items-center" style={{ gap: '8px' }}>
+                                <strong 
+                                    title={group.name}
+                                    style={{ 
+                                        overflow: 'hidden', 
+                                        textOverflow: 'ellipsis', 
+                                        whiteSpace: 'nowrap',
+                                        flex: '1 1 auto',
+                                        minWidth: 0
+                                    }}
+                                >
+                                    {truncateNickname(group.name)}
+                                </strong>
+                                <small style={{ whiteSpace: 'nowrap' }}>{formatDate(group.lastMessageTime)}</small>
+                            </div>
+                            <p className="mb-0 text-muted" style={{ 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis', 
+                                whiteSpace: 'nowrap' 
+                            }}>
+                                {group.imageUrl && group.lastMessage ? (
+                                    <span>
+                                        <i className="bi bi-image"></i> {group.lastMessage.length > 8 ? `${group.lastMessage.slice(0, 8)}...` : group.lastMessage}
+                                    </span>
+                                ) : group.imageUrl ? (
+                                    <span><i className="bi bi-image"></i> {t('messageList.image')}</span>
+                                ) : group.lastMessage ? (
+                                    group.lastMessage.length > 10 ? `${group.lastMessage.slice(0, 10)}...` : group.lastMessage
+                                ) : (
+                                    t('messageList.noMessagesYet')
+                                )}
+                            </p>
+                        </div>
+                    </div>
+                ))}
                 {filteredMessages.length > 0 ? (
                     filteredMessages.map((msg) => (
                     <div
@@ -196,7 +280,7 @@ function MessageList({ messages, onSelectMessage, unreadMessagesCount }) {
                         </div>
                     </div>
                 ))
-            ) : sortedMessages.length === 0 ? (
+            ) : sortedMessages.length === 0 && groups.length === 0 ? (
                 <div
                     className="d-flex flex-column align-items-center justify-content-center text-muted"
                     style={{

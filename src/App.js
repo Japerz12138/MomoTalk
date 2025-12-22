@@ -46,8 +46,10 @@ function App() {
     const [captcha, setCaptcha] = useState('');
     const [captchaInput, setCaptchaInput] = useState('');
     const [friends, setFriends] = useState([]);
+    const [groups, setGroups] = useState([]);
     const [friendRequests, setFriendRequests] = useState([]);
     const [selectedFriend, setSelectedFriend] = useState(null);
+    const [selectedGroup, setSelectedGroup] = useState(null);
     const [dms, setDms] = useState([]);
     const [showMenu, setShowMenu] = useState(false);
     const [error, setError] = useState('');
@@ -324,13 +326,29 @@ function App() {
         }
     }, [token]);
 
-    // Fetch friends and requests when token is available
+    const fetchGroups = useCallback(async () => {
+        if (!token) return;
+        try {
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/groups`);
+            setGroups(response.data);
+        } catch (error) {
+            if (error.response?.status === 401) {
+                console.error('Unauthorized! Clearing token.');
+                handleLogout();
+            } else {
+                console.error('Error fetching groups:', error);
+            }
+        }
+    }, [token]);
+
+    // Fetch friends AND groups and requests when token is available
     useEffect(() => {
         if (token) {
             fetchFriends();
+            fetchGroups();
             fetchFriendRequests();
         }
-    }, [token, fetchFriends, fetchFriendRequests]);
+    }, [token, fetchFriends, fetchGroups, fetchFriendRequests]);
 
     // Handle incoming messages - NO join_room here!
     useEffect(() => {
@@ -538,10 +556,62 @@ function App() {
 
         socket.on('receive_message', handleReceiveMessage);
 
+        const handleReceiveGroupMessage = (message) => {
+            const currentActiveSection = activeSection;
+            const currentSelectedGroup = selectedGroup;
+            console.log('Received group message:', message);
+
+            const isViewingThisGroup = currentActiveSection === 'chat' && currentSelectedGroup && currentSelectedGroup.id === message.groupId;
+
+            const updatedMessage = {
+                ...message,
+                self: message.senderId === userId,
+            };
+
+            if (isViewingThisGroup) {
+                setDms((prevDms) => {
+                    if (message.id) {
+                        const existsById = prevDms.some(dm => dm.id === message.id);
+                        if (existsById) {
+                            return prevDms.map(dm => dm.id === message.id ? updatedMessage : dm);
+                        }
+                    }
+                    if (message.clientId) {
+                        const existsByClientId = prevDms.some(dm => dm.clientId === message.clientId);
+                        if (existsByClientId) {
+                            return prevDms.map(dm => dm.clientId === message.clientId ? updatedMessage : dm);
+                        }
+                    }
+                    return [...prevDms, updatedMessage];
+                });
+            }
+
+            setGroups((prevGroups) => {
+                return prevGroups.map((group) => {
+                    if (group.id === message.groupId) {
+                        return {
+                            ...group,
+                            lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
+                            lastMessageTime: message.timestamp,
+                            imageUrl: message.imageUrl || null,
+                        };
+                    }
+                    return group;
+                }).sort((a, b) => {
+                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                    return timeB - timeA;
+                });
+            });
+        };
+
+        socket.on('receive_group_message', handleReceiveGroupMessage);
+
         return () => {
             socket.off('receive_message', handleReceiveMessage);
+            socket.off('receive_group_message', handleReceiveGroupMessage);
         };
-    }, [userId, activeSection, selectedFriend]);
+    }, [userId, activeSection, selectedFriend, selectedGroup]);
 
     useEffect(() => {
         // Use socket (global) since user joins room via socket
@@ -960,6 +1030,60 @@ function App() {
         }
     };
 
+    const handleCreateGroup = async (name) => {
+        try {
+            await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/create`, { name }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            handleShowToast(t('toast.success'), '群组创建成功');
+            fetchGroups();
+        } catch (error) {
+            console.error('Error creating group:', error.response?.data?.error || error);
+            handleShowToast(t('toast.error'), error.response?.data?.error || '创建群组失败');
+        }
+    };
+
+    const handleJoinGroup = async (groupId) => {
+        try {
+            await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/join`, { groupId }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            handleShowToast(t('toast.success'), '加入群组成功');
+            fetchGroups();
+        } catch (error) {
+            console.error('Error joining group:', error.response?.data?.error || error);
+            handleShowToast(t('toast.error'), error.response?.data?.error || '加入群组失败');
+        }
+    };
+
+    const handleSelectGroup = async (group) => {
+        if (!token || !group) return;
+
+        setSelectedGroup(group);
+        setSelectedFriend(null);
+
+        try {
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${group.id}/messages`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const messagesWithAvatar = response.data.map((message) => ({
+                ...message,
+                self: message.senderId === userId,
+                avatar: message.avatar || DEFAULT_AVATAR,
+            }));
+
+            setDms(messagesWithAvatar);
+        } catch (error) {
+            if (error.response?.status === 401) {
+                console.error('Unauthorized! Clearing token.');
+                handleLogout();
+            } else {
+                console.error('Error fetching group messages:', error);
+            }
+        }
+    };
+
     const handleSelectFriend = async (friend) => {
         if (!token || !friend) return;
 
@@ -1131,6 +1255,95 @@ function App() {
                     socket.emit('join_room', userId);
                 }
             }, 1000);
+        }
+        
+        // Handle group messages
+        if ((hasText || hasImages) && selectedGroup) {
+            const groupId = selectedGroup.id;
+            if (hasImages && hasImages.length === 1 && hasText) {
+                const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const newMessage = {
+                    senderId: userId,
+                    groupId: groupId,
+                    text: input.trim(),
+                    imageUrl: imageUrls[0],
+                    replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                    clientId
+                };
+                socket.emit('send_group_message', newMessage);
+                setDms((prevDms) => [...prevDms, { ...newMessage, self: true, avatar: avatar || DEFAULT_AVATAR, nickname }]);
+                setInput('');
+                setImageQueue([]);
+                setReplyTo(null);
+                setGroups((prevGroups) => {
+                    return prevGroups.map((group) => {
+                        if (group.id === groupId) {
+                            return {
+                                ...group,
+                                lastMessage: newMessage.text || '[Image]',
+                                lastMessageTime: new Date().toISOString(),
+                                imageUrl: newMessage.imageUrl || null,
+                            };
+                        }
+                        return group;
+                    });
+                });
+            } else if (hasText && !hasImages) {
+                const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const textMessage = {
+                    senderId: userId,
+                    groupId: groupId,
+                    text: input.trim(),
+                    replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                    clientId
+                };
+                socket.emit('send_group_message', textMessage);
+                setDms((prevDms) => [...prevDms, { ...textMessage, self: true, avatar: avatar || DEFAULT_AVATAR, nickname }]);
+                setInput('');
+                setImageQueue([]);
+                setReplyTo(null);
+                setGroups((prevGroups) => {
+                    return prevGroups.map((group) => {
+                        if (group.id === groupId) {
+                            return {
+                                ...group,
+                                lastMessage: textMessage.text,
+                                lastMessageTime: new Date().toISOString(),
+                            };
+                        }
+                        return group;
+                    });
+                });
+            } else {
+                if (hasText) {
+                    const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    const textMessage = {
+                        senderId: userId,
+                        groupId: groupId,
+                        text: input.trim(),
+                        replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                        clientId
+                    };
+                    socket.emit('send_group_message', textMessage);
+                    setDms((prevDms) => [...prevDms, { ...textMessage, self: true, avatar: avatar || DEFAULT_AVATAR, nickname }]);
+                }
+                imageUrls.forEach((imageUrl, index) => {
+                    const clientId = `client_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+                    const imageMessage = {
+                        senderId: userId,
+                        groupId: groupId,
+                        imageUrl: imageUrl,
+                        replyTo: replyTo ? { id: replyTo.id, text: replyTo.text, imageUrl: replyTo.imageUrl, senderId: replyTo.senderId } : null,
+                        clientId
+                    };
+                    socket.emit('send_group_message', imageMessage);
+                    setDms((prevDms) => [...prevDms, { ...imageMessage, self: true, avatar: avatar || DEFAULT_AVATAR, nickname }]);
+                });
+                setInput('');
+                setImageQueue([]);
+                setReplyTo(null);
+            }
+            return;
         }
         
         if ((hasText || hasImages) && selectedFriend) {
@@ -1508,7 +1721,9 @@ function App() {
         setUsername('');
         setPassword('');
         setFriends([]);
+        setGroups([]);
         setSelectedFriend(null);
+        setSelectedGroup(null);
         setDms([]);
         setFriendRequests([]);
         setShowMenu(false);
@@ -1761,11 +1976,18 @@ function App() {
                                                     isOnline: friend.isOnline,
                                                 }))
                                             ]}
+                                            groups={groups}
                                             onSelectMessage={(msg) => {
                                                 if (msg.isSelf) {
                                                     handleSelectFriend({ id: userId, nickname: t('friendList.multiDevice'), avatar, isSelf: true });
                                                 } else {
                                                     handleSelectFriendMobile(msg);
+                                                }
+                                            }}
+                                            onSelectGroup={(group) => {
+                                                handleSelectGroup(group);
+                                                if (isMobile) {
+                                                    setSidebarOpen(false);
                                                 }
                                             }}
                                             unreadMessagesCount={unreadMessagesCount}
@@ -1778,9 +2000,18 @@ function App() {
                                     <div className="mobile-friend-list" style={{ height: '100%', overflow: 'auto' }}>
                                         <FriendList
                                             friends={friends}
+                                            groups={groups}
                                             onSelectFriend={(friend) => {
                                                 setSelectedFriend(friend);
                                             }}
+                                            onSelectGroup={(group) => {
+                                                handleSelectGroup(group);
+                                                if (isMobile) {
+                                                    setSidebarOpen(false);
+                                                }
+                                            }}
+                                            onCreateGroup={handleCreateGroup}
+                                            onJoinGroup={handleJoinGroup}
                                             userId={userId}
                                             nickname={nickname}
                                             avatar={avatar}
@@ -1918,15 +2149,18 @@ function App() {
                             </div>
 
                             {/* Chat Container for Mobile */}
-                            {activeSection === 'chat' && selectedFriend && (
+                            {activeSection === 'chat' && (selectedFriend || selectedGroup) && (
                                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1100, background: 'white' }}>
                                     <ChatContainer
-                                        friend={selectedFriend}
+                                        friend={selectedFriend || (selectedGroup ? { id: selectedGroup.id, nickname: selectedGroup.name, isGroup: true } : null)}
                                         messages={dms}
                                         onDeleteDMs={handleDeleteDMs}
                                         userId={userId}
                                         socket={socketInstance}
-                                        onBack={() => setSelectedFriend(null)}
+                                        onBack={() => {
+                                            setSelectedFriend(null);
+                                            setSelectedGroup(null);
+                                        }}
                                         isMobile={true}
                                         input={input}
                                         onInputChange={(e) => setInput(e.target.value)}
@@ -1990,6 +2224,7 @@ function App() {
                                                 isOnline: friend.isOnline,
                                             }))
                                         ]}
+                                        groups={groups}
                                         onSelectMessage={(msg) => {
                                             if (msg.isSelf) {
                                                 handleSelectFriend({ id: userId, nickname: t('friendList.multiDevice'), avatar, isSelf: true });
@@ -1997,6 +2232,7 @@ function App() {
                                                 handleSelectFriend(msg);
                                             }
                                         }}
+                                        onSelectGroup={handleSelectGroup}
                                         unreadMessagesCount={unreadMessagesCount}
                                     />
                                 )}
@@ -2004,9 +2240,13 @@ function App() {
                                 {activeSection === 'friend-list' && (
                                     <FriendList
                                         friends={friends}
+                                        groups={groups}
                                         onSelectFriend={(friend) => {
                                             handleSelectFriend(friend);
                                         }}
+                                        onSelectGroup={handleSelectGroup}
+                                        onCreateGroup={handleCreateGroup}
+                                        onJoinGroup={handleJoinGroup}
                                         userId={userId}
                                         nickname={nickname}
                                         avatar={avatar}
@@ -2040,23 +2280,29 @@ function App() {
                                     position: 'relative'
                                 }}
                             >
-                                {activeSection === 'chat' && selectedFriend && (
+                                {activeSection === 'chat' && (selectedFriend || selectedGroup) && (
                                     <>
                                         <ChatContainer
-                                            messages={selectedFriend ? dms : []}
-                                            currentChat={selectedFriend ? selectedFriend.nickname : 'Select a conversation'}
-                                            friend={selectedFriend}
+                                            messages={(selectedFriend || selectedGroup) ? dms : []}
+                                            currentChat={(selectedFriend || selectedGroup) ? (selectedFriend?.nickname || selectedGroup?.name) : 'Select a conversation'}
+                                            friend={selectedFriend || (selectedGroup ? { id: selectedGroup.id, nickname: selectedGroup.name, isGroup: true } : null)}
                                             isMobile={false}
                                             imageQueue={imageQueue}
                                             onAddImageToQueue={addImageToQueue}
                                             onRemoveImageFromQueue={removeImageFromQueue}
                                             onReply={(message) => setReplyTo(message)}
                                             onDeleteMessage={handleDeleteMessage}
+                                            input={input}
+                                            onInputChange={(e) => setInput(e.target.value)}
+                                            onSendMessage={handleSendDM}
+                                            onToggleEmojiPanel={handleToggleEmojiPanel}
+                                            replyTo={replyTo}
+                                            onCancelReply={() => setReplyTo(null)}
                                         />
                                         <MessageInput
                                             input={input}
                                             onInputChange={(e) => setInput(e.target.value)}
-                                            onSendMessage={selectedFriend ? handleSendDM : null}
+                                            onSendMessage={(selectedFriend || selectedGroup) ? handleSendDM : null}
                                             onToggleEmojiPanel={handleToggleEmojiPanel}
                                             isMobile={false}
                                             imageQueue={imageQueue}

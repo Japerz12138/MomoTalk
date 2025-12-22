@@ -90,3 +90,45 @@ CREATE INDEX idx_dms_id_timestamp ON dms (id, timestamp DESC);
 
 CREATE INDEX idx_dms_user_timestamp ON dms (sender_id, timestamp DESC);
 CREATE INDEX idx_dms_receiver_timestamp ON dms (receiver_id, timestamp DESC);
+
+-- NEW ADDED FOR GROUPS - 12/22/2025
+
+CREATE TABLE groups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    avatar VARCHAR(500) DEFAULT NULL,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_created_by (created_by)
+);
+
+CREATE TABLE group_members (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    user_id INT NOT NULL,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_group_member (group_id, user_id),
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_group_id (group_id),
+    INDEX idx_user_id (user_id)
+);
+
+CREATE TABLE group_messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    sender_id INT NOT NULL,
+    text TEXT NOT NULL,
+    image_url VARCHAR(500) DEFAULT NULL,
+    message_type ENUM('text', 'image', 'both') DEFAULT 'text',
+    reply_to_id INT DEFAULT NULL,
+    reply_to_data TEXT DEFAULT NULL,
+    is_emoji TINYINT(1) DEFAULT 0,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reply_to_id) REFERENCES group_messages(id) ON DELETE SET NULL,
+    INDEX idx_group_timestamp (group_id, timestamp DESC),
+    INDEX idx_sender_id (sender_id)
+);

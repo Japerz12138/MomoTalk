@@ -446,6 +446,15 @@ io.on('connection', (socket) => {
             socket.join(userId.toString());
             console.log(`User ${userId} joined room`);
 
+            // Join all group rooms the user is a member of
+            db.query('SELECT group_id FROM group_members WHERE user_id = ?', [userId], (err, groups) => {
+                if (!err) {
+                    groups.forEach(group => {
+                        socket.join(`group_${group.group_id}`);
+                    });
+                }
+            });
+
             // Update last_used_at when user comes online
             db.query('UPDATE user_sessions SET last_used_at = NOW() WHERE user_id = ?', [userId], (err) => {
                 if (err) console.error('Error updating last_used_at on join:', err);
@@ -514,6 +523,134 @@ io.on('connection', (socket) => {
             socket.leave(userId.toString());
             console.log(`User ${userId} left room`);
         }
+    });
+    
+    // Baisc Group Message Functions
+
+    socket.on('send_group_message', (data) => {
+        const { senderId, groupId, text, imageUrl, replyTo, clientId, isEmoji } = data;
+
+        if (!senderId || !groupId) {
+            console.error('Invalid group message payload: missing senderId or groupId', data);
+            return;
+        }
+
+        const hasText = text && text.trim().length > 0;
+        const hasImage = imageUrl && imageUrl.trim().length > 0;
+
+        if (!hasText && !hasImage) {
+            console.error('Invalid group message payload: missing text and imageUrl', data);
+            return;
+        }
+
+        // Check if user is a member
+        db.query('SELECT id FROM group_members WHERE group_id = ? AND user_id = ?', [groupId, senderId], (checkErr, checkResults) => {
+            if (checkErr || checkResults.length === 0) {
+                console.error('User is not a member of this group');
+                return;
+            }
+
+            let messageType = 'text';
+            if (hasText && hasImage) {
+                messageType = 'both';
+            } else if (hasImage) {
+                messageType = 'image';
+            }
+
+            const textValue = hasText ? text.trim() : '';
+            const encryptedText = hasText ? encryptMessage(textValue) : '';
+
+            let replyToId = null;
+            let replyToData = null;
+            if (replyTo) {
+                if (replyTo.id) {
+                    replyToId = replyTo.id;
+                } else if (replyTo.senderId && (replyTo.text || replyTo.imageUrl)) {
+                    const findReplyQuery = `
+                        SELECT id FROM group_messages 
+                        WHERE group_id = ? AND (text = ? OR image_url = ?)
+                        ORDER BY timestamp DESC LIMIT 1
+                    `;
+                    const replyText = replyTo.text ? encryptMessage(replyTo.text.trim()) : '';
+                    db.query(findReplyQuery, [groupId, replyText || null, replyTo.imageUrl || null], (findErr, findResults) => {
+                        if (!findErr && findResults.length > 0) {
+                            replyToId = findResults[0].id;
+                            insertGroupMessage();
+                        } else {
+                            replyToData = JSON.stringify(replyTo);
+                            insertGroupMessage();
+                        }
+                    });
+                    return;
+                }
+            }
+
+            function insertGroupMessage() {
+                const query = 'INSERT INTO group_messages (group_id, sender_id, text, image_url, message_type, reply_to_id, reply_to_data, is_emoji, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP());';
+                db.query(query, [groupId, senderId, encryptedText, hasImage ? imageUrl : null, messageType, replyToId, replyToData, isEmoji ? 1 : 0], (err, insertResult) => {
+                    if (!err) {
+                        const messageId = insertResult.insertId;
+                        const userQuery = 'SELECT nickname, avatar FROM users WHERE id = ?';
+                        db.query(userQuery, [senderId], (userErr, userResults) => {
+                            if (!userErr && userResults.length > 0) {
+                                const { nickname, avatar } = userResults[0];
+
+                                let finalReplyTo = null;
+                                if (replyToId) {
+                                    const getReplyQuery = 'SELECT text, image_url, sender_id FROM group_messages WHERE id = ?';
+                                    db.query(getReplyQuery, [replyToId], (replyErr, replyResults) => {
+                                        if (!replyErr && replyResults.length > 0) {
+                                            const replyMsg = replyResults[0];
+                                            finalReplyTo = {
+                                                id: replyToId,
+                                                text: replyMsg.text ? decryptMessage(replyMsg.text) : null,
+                                                imageUrl: replyMsg.image_url,
+                                                senderId: replyMsg.sender_id
+                                            };
+                                        }
+                                        emitGroupMessage(finalReplyTo);
+                                    });
+                                } else if (replyToData) {
+                                    try {
+                                        finalReplyTo = JSON.parse(replyToData);
+                                    } catch (e) {
+                                        finalReplyTo = null;
+                                    }
+                                    emitGroupMessage(finalReplyTo);
+                                } else {
+                                    emitGroupMessage(null);
+                                }
+
+                                function emitGroupMessage(replyToInfo) {
+                                    const emitData = {
+                                        id: messageId,
+                                        senderId,
+                                        groupId,
+                                        text: hasText ? textValue : null,
+                                        imageUrl: hasImage ? imageUrl : null,
+                                        messageType,
+                                        timestamp: new Date().toISOString(),
+                                        nickname,
+                                        avatar,
+                                        replyTo: replyToInfo,
+                                        clientId,
+                                        isEmoji: Boolean(isEmoji)
+                                    };
+                                    // Send to all group members
+                                    io.to(`group_${groupId}`).emit('receive_group_message', emitData);
+                                }
+                            }
+                        });
+                    } else {
+                        console.error('Error saving group message:', err.message);
+                    }
+                });
+            }
+
+            if (!replyTo || replyTo.id) {
+                insertGroupMessage();
+            }
+        });
     });
 
     socket.on('send_message', (data) => {
@@ -1919,6 +2056,204 @@ app.delete('/emojis/favorite/:id', authenticateToken, (req, res) => {
         }
 
         res.json({ message: 'Emoji removed from favorites' });
+    });
+});
+
+// Group Messages routes queries
+app.post('/groups/create', authenticateToken, (req, res) => {
+    const { name } = req.body;
+    const userId = req.user.userId;
+
+    if (!name || !name.trim()) {
+        return res.status(400).json({ error: 'Group name is required' });
+    }
+
+    const createGroupQuery = 'INSERT INTO groups (name, created_by) VALUES (?, ?)';
+    db.query(createGroupQuery, [name.trim(), userId], (err, result) => {
+        if (err) {
+            console.error('Error creating group:', err.message);
+            return res.status(500).json({ error: 'Failed to create group' });
+        }
+
+        const groupId = result.insertId;
+        // Add creator as member
+        const addMemberQuery = 'INSERT INTO group_members (group_id, user_id) VALUES (?, ?)';
+        db.query(addMemberQuery, [groupId, userId], (memberErr) => {
+            if (memberErr) {
+                console.error('Error adding creator to group:', memberErr.message);
+                return res.status(500).json({ error: 'Failed to add creator to group' });
+            }
+
+            res.json({ message: 'Group created successfully', groupId });
+        });
+    });
+});
+
+app.post('/groups/join', authenticateToken, (req, res) => {
+    const { groupId } = req.body;
+    const userId = req.user.userId;
+
+    if (!groupId) {
+        return res.status(400).json({ error: 'Group ID is required' });
+    }
+
+    // Check if group exists
+    const checkGroupQuery = 'SELECT id FROM groups WHERE id = ?';
+    db.query(checkGroupQuery, [groupId], (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+
+        // Check if already a member
+        const checkMemberQuery = 'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?';
+        db.query(checkMemberQuery, [groupId, userId], (checkErr, checkResults) => {
+            if (checkErr) {
+                return res.status(500).json({ error: 'Database error' });
+            }
+            if (checkResults.length > 0) {
+                return res.status(400).json({ error: 'Already a member of this group' });
+            }
+
+            // Add member
+            const addMemberQuery = 'INSERT INTO group_members (group_id, user_id) VALUES (?, ?)';
+            db.query(addMemberQuery, [groupId, userId], (addErr) => {
+                if (addErr) {
+                    return res.status(500).json({ error: 'Failed to join group' });
+                }
+                res.json({ message: 'Joined group successfully' });
+            });
+        });
+    });
+});
+
+app.get('/groups', authenticateToken, (req, res) => {
+    const userId = req.user.userId;
+
+    const groupsQuery = `
+        SELECT g.id, g.name, g.avatar, g.created_by,
+               (SELECT gm.text
+                FROM group_messages gm
+                WHERE gm.group_id = g.id
+                ORDER BY gm.timestamp DESC LIMIT 1) AS lastMessage,
+               (SELECT gm.timestamp
+                FROM group_messages gm
+                WHERE gm.group_id = g.id
+                ORDER BY gm.timestamp DESC LIMIT 1) AS lastMessageTime,
+               (SELECT gm.image_url
+                FROM group_messages gm
+                WHERE gm.group_id = g.id
+                ORDER BY gm.timestamp DESC LIMIT 1) AS imageUrl
+        FROM groups g
+        INNER JOIN group_members gm ON g.id = gm.group_id
+        WHERE gm.user_id = ?
+        ORDER BY lastMessageTime DESC, g.created_at DESC
+    `;
+
+    db.query(groupsQuery, [userId], (err, results) => {
+        if (err) {
+            console.error('Error fetching groups:', err.message);
+            return res.status(500).json({ error: 'Failed to fetch groups' });
+        }
+
+        const groupsWithDecrypted = results.map(group => ({
+            ...group,
+            lastMessage: group.lastMessage ? decryptMessage(group.lastMessage) : null
+        }));
+
+        res.json(groupsWithDecrypted);
+    });
+});
+
+app.get('/groups/:groupId/messages', authenticateToken, (req, res) => {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+    const { limit = 100, before_id = null } = req.query;
+
+    // Check if user is a member
+    const checkMemberQuery = 'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?';
+    db.query(checkMemberQuery, [groupId, userId], (checkErr, checkResults) => {
+        if (checkErr) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (checkResults.length === 0) {
+            return res.status(403).json({ error: 'Not a member of this group' });
+        }
+
+        let getMessagesQuery;
+        let queryParams;
+
+        if (before_id) {
+            getMessagesQuery = `
+                SELECT gm.id, gm.text, gm.image_url AS imageUrl, gm.message_type AS messageType, gm.timestamp,
+                       gm.sender_id AS senderId, gm.group_id AS groupId,
+                       gm.reply_to_id AS replyToId, gm.reply_to_data AS replyToData,
+                       gm.is_emoji AS isEmoji,
+                       (gm.sender_id = ?) AS self,
+                       u.nickname, u.avatar,
+                       reply_msg.text AS replyText, reply_msg.image_url AS replyImageUrl, reply_msg.sender_id AS replySenderId
+                FROM group_messages gm
+                LEFT JOIN users u ON gm.sender_id = u.id
+                LEFT JOIN group_messages AS reply_msg ON gm.reply_to_id = reply_msg.id
+                WHERE gm.group_id = ? AND gm.id < ?
+                ORDER BY gm.timestamp DESC
+                LIMIT ?
+            `;
+            queryParams = [userId, groupId, parseInt(before_id), parseInt(limit)];
+        } else {
+            getMessagesQuery = `
+                SELECT gm.id, gm.text, gm.image_url AS imageUrl, gm.message_type AS messageType, gm.timestamp,
+                       gm.sender_id AS senderId, gm.group_id AS groupId,
+                       gm.reply_to_id AS replyToId, gm.reply_to_data AS replyToData,
+                       gm.is_emoji AS isEmoji,
+                       (gm.sender_id = ?) AS self,
+                       u.nickname, u.avatar,
+                       reply_msg.text AS replyText, reply_msg.image_url AS replyImageUrl, reply_msg.sender_id AS replySenderId
+                FROM group_messages gm
+                LEFT JOIN users u ON gm.sender_id = u.id
+                LEFT JOIN group_messages AS reply_msg ON gm.reply_to_id = reply_msg.id
+                WHERE gm.group_id = ?
+                ORDER BY gm.timestamp DESC
+                LIMIT ?
+            `;
+            queryParams = [userId, groupId, parseInt(limit)];
+        }
+
+        db.query(getMessagesQuery, queryParams, (err, results) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+
+            const decryptedResults = results.map(msg => {
+                const result = {
+                    ...msg,
+                    text: msg.text ? decryptMessage(msg.text) : null,
+                    isEmoji: msg.isEmoji ? true : false
+                };
+
+                if (msg.replyToId && msg.replyText !== null) {
+                    result.replyTo = {
+                        id: msg.replyToId,
+                        text: msg.replyText ? decryptMessage(msg.replyText) : null,
+                        imageUrl: msg.replyImageUrl,
+                        senderId: msg.replySenderId
+                    };
+                } else if (msg.replyToData) {
+                    try {
+                        result.replyTo = JSON.parse(msg.replyToData);
+                    } catch (e) {
+                        result.replyTo = null;
+                    }
+                }
+
+                return result;
+            });
+
+            const finalResults = before_id ? decryptedResults.reverse() : decryptedResults.reverse();
+            res.json(finalResults);
+        });
     });
 });
 
