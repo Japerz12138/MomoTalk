@@ -179,6 +179,37 @@ function encryptMessage(text) {
     }
 }
 
+// Helper function to insert system message in group
+function insertGroupSystemMessage(groupId, text, ioInstance) {
+    // Use NULL as sender_id for system messages to avoid foreign key constraint
+    const query = 'INSERT INTO group_messages (group_id, sender_id, text, message_type, timestamp) VALUES (?, NULL, ?, ?, UTC_TIMESTAMP())';
+    db.query(query, [groupId, text, 'system'], (err, result) => {
+        if (err) {
+            console.error('Error inserting system message:', err);
+            return;
+        }
+        if (ioInstance) {
+            const messageId = result.insertId;
+            const emitData = {
+                id: messageId,
+                senderId: 0, // Use 0 for frontend display, but NULL in database
+                groupId,
+                text: text,
+                imageUrl: null,
+                messageType: 'system',
+                timestamp: new Date().toISOString(),
+                nickname: null,
+                avatar: null,
+                momoCode: null,
+                replyTo: null,
+                clientId: null,
+                isEmoji: false
+            };
+            ioInstance.to(`group_${groupId}`).emit('receive_group_message', emitData);
+        }
+    });
+}
+
 function decryptMessage(encryptedText) {
     if (!encryptedText || encryptedText.trim().length === 0) {
         return encryptedText; // Return empty string as-is
@@ -1876,7 +1907,7 @@ app.post('/dm/send', authenticateToken, (req, res) => {
 app.get('/dm/:friendId', authenticateToken, (req, res) => {
     const friendId = req.params.friendId;
     const userId = req.user.userId;
-    const { limit = 100, before_id = null } = req.query; // Support cursor-based pagination
+    const { limit = 20, before_id = null } = req.query; // Support cursor-based pagination
 
     let getDMQuery;
     let queryParams;
@@ -2078,6 +2109,7 @@ app.delete('/emojis/favorite/:id', authenticateToken, (req, res) => {
 
 // Group Messages routes queries
 app.post('/groups/create', authenticateToken, async (req, res) => {
+    console.log('=== /groups/create API called ===');
     const { name } = req.body;
     const userId = req.user.userId;
 
@@ -2102,6 +2134,14 @@ app.post('/groups/create', authenticateToken, async (req, res) => {
                     console.error('Error adding creator to group:', memberErr.message);
                     return res.status(500).json({ error: 'Failed to add creator to group' });
                 }
+
+                // Get creator nickname for system message
+                db.query('SELECT nickname FROM users WHERE id = ?', [userId], (userErr, userResults) => {
+                    if (!userErr && userResults.length > 0) {
+                        const nickname = userResults[0].nickname || 'Someone';
+                        insertGroupSystemMessage(groupId, `${nickname} 创建了群组`, io);
+                    }
+                });
 
                 res.json({ message: 'Group created successfully', groupId, groupCode });
             });
@@ -2148,6 +2188,13 @@ app.post('/groups/join', authenticateToken, (req, res) => {
                 if (addErr) {
                     return res.status(500).json({ error: 'Failed to join group' });
                 }
+                // Get user nickname for system message
+                db.query('SELECT nickname FROM users WHERE id = ?', [userId], (userErr, userResults) => {
+                    if (!userErr && userResults.length > 0) {
+                        const nickname = userResults[0].nickname || 'Someone';
+                        insertGroupSystemMessage(groupId, `${nickname} 加入了群组`, io);
+                    }
+                });
                 res.json({ message: 'Joined group successfully' });
             });
         });
@@ -2330,10 +2377,26 @@ app.post('/groups/:groupId/remove-member', authenticateToken, (req, res) => {
         const removeQuery = 'DELETE FROM group_members WHERE group_id = ? AND user_id = ?';
         db.query(removeQuery, [groupId, memberId], (err, result) => {
             if (err) {
+                console.error('Error removing member:', err);
                 return res.status(500).json({ error: err.message });
             }
             if (result.affectedRows === 0) {
                 return res.status(404).json({ error: 'Member not found in group' });
+            }
+            // Get user nickname for system message
+            db.query('SELECT nickname FROM users WHERE id = ?', [memberId], (userErr, userResults) => {
+                if (!userErr && userResults.length > 0) {
+                    const nickname = userResults[0].nickname || 'Someone';
+                    // Send system message BEFORE removing user from socket room
+                    insertGroupSystemMessage(groupId, `${nickname} 被移出群组`, io);
+                }
+            });
+            // Notify the removed user via socket
+            const removedUserSocketId = onlineUsers.get(memberId);
+            if (removedUserSocketId) {
+                io.sockets.sockets.get(removedUserSocketId)?.emit('removed_from_group', { groupId });
+                // Remove user from socket room
+                io.sockets.sockets.get(removedUserSocketId)?.leave(`group_${groupId}`);
             }
             res.json({ message: 'Member removed successfully' });
         });
@@ -2364,6 +2427,19 @@ app.post('/groups/:groupId/leave', authenticateToken, (req, res) => {
             }
             if (result.affectedRows === 0) {
                 return res.status(404).json({ error: 'Not a member of this group' });
+            }
+            // Get user nickname for system message BEFORE removing from socket room
+            db.query('SELECT nickname FROM users WHERE id = ?', [userId], (userErr, userResults) => {
+                if (!userErr && userResults.length > 0) {
+                    const nickname = userResults[0].nickname || 'Someone';
+                    // Send system message BEFORE user leaves socket room
+                    insertGroupSystemMessage(groupId, `${nickname} 退出了群组`, io);
+                }
+            });
+            // Remove user from socket room after sending system message
+            const userSocketId = onlineUsers.get(userId);
+            if (userSocketId) {
+                io.sockets.sockets.get(userSocketId)?.leave(`group_${groupId}`);
             }
             res.json({ message: 'Left group successfully' });
         });
@@ -2401,7 +2477,7 @@ app.delete('/groups/:groupId', authenticateToken, (req, res) => {
 app.get('/groups/:groupId/messages', authenticateToken, (req, res) => {
     const { groupId } = req.params;
     const userId = req.user.userId;
-    const { limit = 100, before_id = null } = req.query;
+    const { limit = 20, before_id = null } = req.query;
 
     // Check if user is a member
     const checkMemberQuery = 'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?';
@@ -2426,7 +2502,7 @@ app.get('/groups/:groupId/messages', authenticateToken, (req, res) => {
                        u.nickname, u.avatar, u.momo_code AS momoCode,
                        reply_msg.text AS replyText, reply_msg.image_url AS replyImageUrl, reply_msg.sender_id AS replySenderId
                 FROM group_messages gm
-                LEFT JOIN users u ON gm.sender_id = u.id
+                LEFT JOIN users u ON gm.sender_id = u.id AND gm.sender_id IS NOT NULL
                 LEFT JOIN group_messages AS reply_msg ON gm.reply_to_id = reply_msg.id
                 WHERE gm.group_id = ? AND gm.id < ?
                 ORDER BY gm.timestamp DESC
@@ -2443,7 +2519,7 @@ app.get('/groups/:groupId/messages', authenticateToken, (req, res) => {
                        u.nickname, u.avatar, u.momo_code AS momoCode,
                        reply_msg.text AS replyText, reply_msg.image_url AS replyImageUrl, reply_msg.sender_id AS replySenderId
                 FROM group_messages gm
-                LEFT JOIN users u ON gm.sender_id = u.id
+                LEFT JOIN users u ON gm.sender_id = u.id AND gm.sender_id IS NOT NULL
                 LEFT JOIN group_messages AS reply_msg ON gm.reply_to_id = reply_msg.id
                 WHERE gm.group_id = ?
                 ORDER BY gm.timestamp DESC
@@ -2458,9 +2534,12 @@ app.get('/groups/:groupId/messages', authenticateToken, (req, res) => {
             }
 
             const decryptedResults = results.map(msg => {
+                // System messages don't need decryption
+                const isSystemMessage = msg.messageType === 'system';
                 const result = {
                     ...msg,
-                    text: msg.text ? decryptMessage(msg.text) : null,
+                    senderId: msg.senderId === null ? 0 : msg.senderId, // Convert NULL to 0 for system messages
+                    text: isSystemMessage ? msg.text : (msg.text ? decryptMessage(msg.text) : null),
                     isEmoji: msg.isEmoji ? true : false
                 };
 

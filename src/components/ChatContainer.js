@@ -5,7 +5,7 @@ import MessageInput from './MessageInput';
 import { getFullImageUrl } from '../utils/imageHelper';
 import { useTranslation } from 'react-i18next';
 
-const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue, onReply, onDeleteMessage, replyTo, onCancelReply, onAvatarClick }) => {
+const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue, onReply, onDeleteMessage, replyTo, onCancelReply, onAvatarClick, onLoadMoreMessages, hasMoreMessages, isLoadingMoreMessages }) => {
     const chatEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const { t } = useTranslation();
@@ -17,6 +17,13 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
     const [contextMenu, setContextMenu] = useState(null);
     const scrollTimeoutRef = useRef(null);
     const lastScrollHeightRef = useRef(0);
+    const isLoadingRef = useRef(false);
+    const prevScrollHeightRef = useRef(0);
+    const prevFriendIdRef = useRef(null);
+    const prevMessagesLengthRef = useRef(0);
+    const oldestMessageIdRef = useRef(null); // Track oldest message ID to detect prepend vs append
+    const loadingTimeoutRef = useRef(null); // Track loading timeout to prevent premature scrolling
+    const isInitialLoadRef = useRef(false); // Track if this is initial load (need to scroll to bottom after images load)
 
     const scrollToBottom = () => {
         const container = chatContainerRef.current;
@@ -40,29 +47,197 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
     };
 
     // Use useLayoutEffect to scroll before browser paint, preventing flash
+    // Only scroll to bottom when chat changes, not when loading more messages
     useLayoutEffect(() => {
         const container = chatContainerRef.current;
-        if (container) {
-            // Reset scroll height tracking when messages or friend changes
+        if (!container) return;
+
+        const currentFriendId = friend?.id;
+        const friendChanged = prevFriendIdRef.current !== currentFriendId;
+        prevFriendIdRef.current = currentFriendId;
+
+        // Only scroll to bottom when switching to a new chat
+        if (friendChanged) {
+            // Reset all scroll-related tracking when friend changes
             lastScrollHeightRef.current = 0;
+            isLoadingRef.current = false;
+            prevScrollHeightRef.current = 0;
+            prevMessagesLengthRef.current = 0; // Reset so initial load detection works
+            oldestMessageIdRef.current = null; // Reset oldest message tracking
+            isInitialLoadRef.current = true; // Mark as initial load
             scrollToBottom();
-            // Also scroll after a short delay to catch images that load after initial render
-            const timer = setTimeout(() => {
+            // Also scroll after multiple delays to catch images that load after initial render
+            const timer1 = setTimeout(() => {
+                scrollToBottom();
+            }, 100);
+            const timer2 = setTimeout(() => {
                 scrollToBottom();
                 // Update last scroll height after images potentially load
                 if (container) {
                     lastScrollHeightRef.current = container.scrollHeight;
                 }
-            }, 100);
-            return () => clearTimeout(timer);
+            }, 500); // Longer delay for images
+            const timer3 = setTimeout(() => {
+                scrollToBottom();
+                // Final check after more time for slow images
+                if (container) {
+                    lastScrollHeightRef.current = container.scrollHeight;
+                    isInitialLoadRef.current = false;
+                }
+            }, 1000);
+            return () => {
+                clearTimeout(timer1);
+                clearTimeout(timer2);
+                clearTimeout(timer3);
+            };
         }
-    }, [messages, friend]);
+    }, [friend]); // Only depend on friend, not messages
+
+    useEffect(() => {
+        const container = chatContainerRef.current;
+        if (!container || messages.length === 0) {
+            prevMessagesLengthRef.current = messages.length;
+            oldestMessageIdRef.current = null;
+            return;
+        }
+
+        const currentOldestMessageId = messages[0]?.id;
+        const isPrepending = isLoadingRef.current && 
+                            prevScrollHeightRef.current > 0 && 
+                            oldestMessageIdRef.current !== null &&
+                            currentOldestMessageId !== oldestMessageIdRef.current;
+
+        // If we just loaded more messages, hold scroll position
+        if (isPrepending) {
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+            }
+            
+            //DOM Operation
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        if (container && isLoadingRef.current) {
+                            const newScrollHeight = container.scrollHeight;
+                            const scrollDiff = newScrollHeight - prevScrollHeightRef.current;
+                            container.scrollTop = scrollDiff;
+                            
+                            // Double-check
+                            requestAnimationFrame(() => {
+                                if (container && isLoadingRef.current) {
+                                    const finalScrollHeight = container.scrollHeight;
+                                    const finalScrollDiff = finalScrollHeight - prevScrollHeightRef.current;
+                                    container.scrollTop = finalScrollDiff;
+                                }
+                            });
+                            
+                            // Keep loading flag for a bit longer
+                            loadingTimeoutRef.current = setTimeout(() => {
+                                isLoadingRef.current = false;
+                                prevScrollHeightRef.current = 0;
+                                prevMessagesLengthRef.current = messages.length;
+                                oldestMessageIdRef.current = currentOldestMessageId;
+                            }, 100);
+                        }
+                    }, 100);
+                });
+            });
+            return;
+        }
+
+        //scroll to bottom
+        const isInitialLoad = prevMessagesLengthRef.current === 0 && messages.length > 0;
+        
+        if (isInitialLoad) {
+            isInitialLoadRef.current = true; //Mark as initial load so images will trigger scroll
+            prevMessagesLengthRef.current = messages.length;
+            oldestMessageIdRef.current = currentOldestMessageId;
+            requestAnimationFrame(() => {
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
+            // Also scroll after delays to catch images
+            setTimeout(() => {
+                if (container && isInitialLoadRef.current) {
+                    scrollToBottom();
+                }
+            }, 200);
+            setTimeout(() => {
+                if (container && isInitialLoadRef.current) {
+                    scrollToBottom();
+                    isInitialLoadRef.current = false; // Clear flag after sufficient time
+                }
+            }, 1000);
+            return;
+        }
+
+        if (isLoadingRef.current) {
+            return;
+        }
+
+        const isAppending = oldestMessageIdRef.current !== null &&
+                           oldestMessageIdRef.current === currentOldestMessageId && 
+                           messages.length > prevMessagesLengthRef.current;
+        
+        if (isAppending) {
+            prevMessagesLengthRef.current = messages.length;
+            const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            const isNearBottom = scrollBottom < 300;
+            
+            if (isNearBottom) {
+                // Auto-scroll
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        if (container && !isLoadingRef.current) {
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    });
+                });
+            }
+        } else {
+            // Update refs
+            prevMessagesLengthRef.current = messages.length;
+            if (oldestMessageIdRef.current !== currentOldestMessageId) {
+                oldestMessageIdRef.current = currentOldestMessageId;
+            }
+        }
+    }, [messages]);
+
+    // Handle scroll to load more messages
+    const handleScroll = () => {
+        const container = chatContainerRef.current;
+        if (!container || !onLoadMoreMessages || !hasMoreMessages || isLoadingMoreMessages) return;
+        if (isLoadingRef.current) return;
+
+        if (container.scrollTop < 100 && messages.length > 0) {
+            // Get oldest message id
+            const oldestMessage = messages[0];
+            if (oldestMessage && oldestMessage.id) {
+                isLoadingRef.current = true;
+                prevScrollHeightRef.current = container.scrollHeight;
+                oldestMessageIdRef.current = oldestMessage.id; //Save current oldest ID
+                
+                if (loadingTimeoutRef.current) {
+                    clearTimeout(loadingTimeoutRef.current);
+                }
+                
+                onLoadMoreMessages(oldestMessage.id);
+            }
+        }
+    };
 
     // Handle image load - scroll to bottom after image loads
     // Use debounce to avoid excessive scrolling
     const handleImageLoad = () => {
         const container = chatContainerRef.current;
         if (!container) return;
+        
+        //scroll position hold
+        if (isLoadingRef.current) {
+            lastScrollHeightRef.current = container.scrollHeight;
+            return;
+        }
         
         // Check if scrollHeight has changed (image loaded and rendered)
         const newScrollHeight = container.scrollHeight;
@@ -72,10 +247,27 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             if (scrollTimeoutRef.current) {
                 clearTimeout(scrollTimeoutRef.current);
             }
-            // Debounce scrolling to wait for all images to potentially load
-            scrollTimeoutRef.current = setTimeout(() => {
-                scrollToBottom();
-            }, 50);
+            
+            // Scroll to bottom when images load
+            if (isInitialLoadRef.current) {
+                scrollTimeoutRef.current = setTimeout(() => {
+                    if (container && !isLoadingRef.current) {
+                        scrollToBottom();
+                    }
+                }, 50);
+                return;
+            }
+            
+            const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            const isNearBottom = scrollBottom < 300;
+            
+            if (isNearBottom) {
+                scrollTimeoutRef.current = setTimeout(() => {
+                    if (container && !isLoadingRef.current) {
+                        scrollToBottom();
+                    }
+                }, 50);
+            }
         }
     };
 
@@ -84,6 +276,9 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
         return () => {
             if (scrollTimeoutRef.current) {
                 clearTimeout(scrollTimeoutRef.current);
+            }
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
             }
         };
     }, []);
@@ -269,6 +464,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                 onDragLeave={handleDragLeave}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
+                onScroll={handleScroll}
             >
             {isMobile && (
                 <div className="mobile-chat-header d-flex align-items-center" style={{ padding: '16px', minHeight: '64px' }}>
@@ -314,13 +510,39 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             {!isMobile && (
                 <h5 className="text-center text-muted mb-3">{t('chat.chatWith', { currentChat: currentChat || t('chat.selectAConversation') })}</h5>
             )}
+            {/* Loading indicator for older messages */}
+            {isLoadingMoreMessages && (
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    padding: '10px 0',
+                    color: '#6c757d'
+                }}>
+                    <div className="spinner-border spinner-border-sm me-2" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <span>{t('chat.loadingMore') || '加载中...'}</span>
+                </div>
+            )}
+            {/* Show "Load more" hint if there are more messages */}
+            {hasMoreMessages && !isLoadingMoreMessages && messages.length > 0 && (
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    padding: '10px 0',
+                    color: '#adb5bd',
+                    fontSize: '0.85rem'
+                }}>
+                    <span>↑ {t('chat.scrollForMore') || '向上滚动加载更多'}</span>
+                </div>
+            )}
             {messages.length > 0 ? (
                 messages.map((message, index) => {
                     const previousMessage = index > 0 ? messages[index - 1] : null;
                     const showSeparator = shouldShowDateSeparator(message, previousMessage);
                     
                     return (
-                        <React.Fragment key={index}>
+                        <React.Fragment key={message.id || `msg-${index}`}>
                             {showSeparator && (
                                 <div style={{ 
                                     display: 'flex', 
@@ -354,57 +576,72 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                     }}></div>
                                 </div>
                             )}
-                            <div
-                                className="message-wrapper mb-3"
-                                onMouseEnter={() => setHoveredMessageIndex(index)}
-                                onMouseLeave={() => setHoveredMessageIndex(null)}
-                                onContextMenu={(e) => handleContextMenu(e, message)}
-                                style={{ position: 'relative', marginTop: friend?.isGroup && !message.self ? '8px' : '0' }}
-                            >
+                            {(message.messageType === 'system' || (message.senderId === 0 && !message.nickname && !message.avatar)) ? (
+                                <div className="message-wrapper mb-3" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '8px', marginBottom: '8px' }}>
+                                    <div style={{
+                                        padding: '6px 12px',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                                        borderRadius: '12px',
+                                        color: '#6c757d',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 400,
+                                        textAlign: 'center'
+                                    }}>
+                                        {message.text || '系统消息'}
+                                    </div>
+                                </div>
+                            ) : (
                                 <div
-                                    className={`d-flex ${message.self ? 'justify-content-end' : 'align-items-start'}`}
-                                    style={{ 
-                                        maxWidth: '70%',
-                                        marginLeft: message.self ? 'auto' : '0'
-                                    }}
+                                    className="message-wrapper mb-3"
+                                    onMouseEnter={() => setHoveredMessageIndex(index)}
+                                    onMouseLeave={() => setHoveredMessageIndex(null)}
+                                    onContextMenu={(e) => handleContextMenu(e, message)}
+                                    style={{ position: 'relative', marginTop: friend?.isGroup && !message.self ? '8px' : '0' }}
                                 >
-                                    {!message.self && (
-                                        <img
-                                            src={getFullImageUrl(message.avatar || DEFAULT_AVATAR)}
-                                            alt="avatar"
-                                            width="40"
-                                            height="40"
-                                            className="rounded-circle me-2"
-                                            style={{ 
-                                                objectFit: 'cover', 
-                                                objectPosition: 'center', 
-                                                flexShrink: 0,
-                                                cursor: 'pointer'
-                                            }}
-                                            onClick={() => onAvatarClick && onAvatarClick(message.senderId)}
-                                        />
-                                    )}
                                     <div
-                                        className={`d-flex flex-column ${message.self ? 'align-items-end' : 'align-items-start'}`}
+                                        className={`d-flex ${message.self ? 'justify-content-end' : 'align-items-start'}`}
                                         style={{ 
-                                            flex: 1, 
-                                            minWidth: 0,
-                                            maxWidth: '100%'
+                                            maxWidth: '70%',
+                                            marginLeft: message.self ? 'auto' : '0'
                                         }}
                                     >
-                                        {/* Show name */}
-                                        {friend?.isGroup && !message.self && message.nickname && (
-                                            <div style={{
-                                                fontSize: '0.9rem',
-                                                color: '#495A6E',
-                                                marginBottom: '4px',
-                                                fontWeight: 500,
-                                                lineHeight: '1.2'
-                                            }}>
-                                                {message.nickname}
-                                            </div>
+                                        {!message.self && (
+                                            <img
+                                                src={getFullImageUrl(message.avatar || DEFAULT_AVATAR)}
+                                                alt="avatar"
+                                                width="40"
+                                                height="40"
+                                                className="rounded-circle me-2"
+                                                style={{ 
+                                                    objectFit: 'cover', 
+                                                    objectPosition: 'center', 
+                                                    flexShrink: 0,
+                                                    cursor: 'pointer'
+                                                }}
+                                                onClick={() => onAvatarClick && onAvatarClick(message.senderId)}
+                                            />
                                         )}
-                                        <div className={`chat-bubble ${message.self ? 'self' : 'other'}`} style={{ position: 'relative', width: 'fit-content', maxWidth: '100%' }}>
+                                        <div
+                                            className={`d-flex flex-column ${message.self ? 'align-items-end' : 'align-items-start'}`}
+                                            style={{ 
+                                                flex: 1, 
+                                                minWidth: 0,
+                                                maxWidth: '100%'
+                                            }}
+                                        >
+                                            {/* Show name */}
+                                            {friend?.isGroup && !message.self && message.nickname && (
+                                                <div style={{
+                                                    fontSize: '0.9rem',
+                                                    color: '#495A6E',
+                                                    marginBottom: '4px',
+                                                    fontWeight: 500,
+                                                    lineHeight: '1.2'
+                                                }}>
+                                                    {message.nickname}
+                                                </div>
+                                            )}
+                                            <div className={`chat-bubble ${message.self ? 'self' : 'other'}`} style={{ position: 'relative', width: 'fit-content', maxWidth: '100%' }}>
                                         {message.replyTo && (
                                             <div style={{
                                                 padding: '8px',
@@ -490,7 +727,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                     </div>
                                     </div>
                                 </div>
-                                {hoveredMessageIndex === index && (
+                                {hoveredMessageIndex === index && message.messageType !== 'system' && (
                                     <div
                                         className="timestamp text-muted"
                                         style={{
@@ -506,6 +743,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                     </div>
                                 )}
                             </div>
+                            )}
                         </React.Fragment>
                     );
                 })

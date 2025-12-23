@@ -55,6 +55,10 @@ function App() {
     const [isSelectedUserFriend, setIsSelectedUserFriend] = useState(false);
     const [selectedGroupProfile, setSelectedGroupProfile] = useState(null);
     const [dms, setDms] = useState([]);
+    const [hasMoreMessages, setHasMoreMessages] = useState(false);
+    const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+    // Ref to track current chat context for pagination (prevents message mixing)
+    const currentChatContextRef = useRef(null);
     const [showMenu, setShowMenu] = useState(false);
     const [error, setError] = useState('');
     const [activeSection, setActiveSection] = useState('chat');
@@ -564,7 +568,6 @@ function App() {
         const handleReceiveGroupMessage = (message) => {
             const currentActiveSection = activeSection;
             const currentSelectedGroup = selectedGroup;
-            console.log('Received group message:', message);
 
             const isViewingThisGroup = currentActiveSection === 'chat' && currentSelectedGroup && currentSelectedGroup.id === message.groupId;
 
@@ -573,11 +576,31 @@ function App() {
                 self: message.senderId === userId,
                 avatar: message.avatar || DEFAULT_AVATAR,
                 momoCode: message.momoCode || null,
+                messageType: message.messageType || 'text',
             };
 
-            //for real time display
+            //for real time display - always add system messages if viewing the group
             if (isViewingThisGroup) {
                 setDms((prevDms) => {
+                    // For system messages, always add them (they don't have clientId)
+                    if (message.messageType === 'system') {
+                        // Check if system message already exists
+                        const existsById = prevDms.some(dm => dm.id === message.id && dm.messageType === 'system');
+                        if (existsById) {
+                            return prevDms;
+                        }
+                        // Add system message at the end (it's a new real-time message)
+                        // Then sort all messages by timestamp to ensure correct order
+                        const newDms = [...prevDms, updatedMessage];
+                        const sorted = newDms.sort((a, b) => {
+                            const timeA = new Date(a.timestamp).getTime();
+                            const timeB = new Date(b.timestamp).getTime();
+                            return timeA - timeB;
+                        });
+                        return sorted;
+                    }
+                    
+                    // For regular messages, check for duplicates
                     if (message.id) {
                         const existsById = prevDms.some(dm => dm.id === message.id);
                         if (existsById) {
@@ -590,38 +613,63 @@ function App() {
                             return prevDms.map(dm => dm.clientId === message.clientId ? updatedMessage : dm);
                         }
                     }
-                    // New message, add it
-                    return [...prevDms, updatedMessage];
+                    // New message, add it and sort by timestamp
+                    const newDms = [...prevDms, updatedMessage];
+                    const sorted = newDms.sort((a, b) => {
+                        const timeA = new Date(a.timestamp).getTime();
+                        const timeB = new Date(b.timestamp).getTime();
+                        return timeA - timeB;
+                    });
+                    return sorted;
                 });
             }
 
-            // Always update groups list with last message
-            setGroups((prevGroups) => {
-                return prevGroups.map((group) => {
-                    if (group.id === message.groupId) {
-                        return {
-                            ...group,
-                            lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
-                            lastMessageTime: message.timestamp,
-                            imageUrl: message.imageUrl || null,
-                        };
-                    }
-                    return group;
-                }).sort((a, b) => {
-                    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
-                    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
-                    return timeB - timeA;
+            // Always update groups list with last message (skip system messages)
+            if (message.messageType !== 'system') {
+                setGroups((prevGroups) => {
+                    return prevGroups.map((group) => {
+                        if (group.id === message.groupId) {
+                            return {
+                                ...group,
+                                lastMessage: message.text || (message.imageUrl ? '[Image]' : ''),
+                                lastMessageTime: message.timestamp,
+                                imageUrl: message.imageUrl || null,
+                            };
+                        }
+                        return group;
+                    }).sort((a, b) => {
+                        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+                        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                        return timeB - timeA;
+                    });
                 });
-            });
+            }
         };
 
         socket.on('receive_group_message', handleReceiveGroupMessage);
 
+        // Handle being removed from a group
+        const handleRemovedFromGroup = ({ groupId }) => {
+            // Remove group from list
+            setGroups((prevGroups) => prevGroups.filter(g => g.id !== groupId));
+            // If currently viewing this group, close it
+            if (selectedGroup && selectedGroup.id === groupId) {
+                setSelectedGroup(null);
+                setDms([]);
+            }
+            // If group profile is open, close it
+            if (selectedGroupProfile && selectedGroupProfile.id === groupId) {
+                setSelectedGroupProfile(null);
+            }
+        };
+        socket.on('removed_from_group', handleRemovedFromGroup);
+
         return () => {
             socket.off('receive_message', handleReceiveMessage);
             socket.off('receive_group_message', handleReceiveGroupMessage);
+            socket.off('removed_from_group', handleRemovedFromGroup);
         };
-    }, [userId, activeSection, selectedFriend, selectedGroup]);
+    }, [userId, activeSection, selectedFriend, selectedGroup, selectedGroupProfile]);
 
     useEffect(() => {
         // Use socket (global) since user joins room via socket
@@ -1077,23 +1125,42 @@ function App() {
     const handleSelectGroup = async (group) => {
         if (!token || !group) return;
 
+        // Update chat context ref immediately
+        const chatContext = { type: 'group', id: group.id };
+        currentChatContextRef.current = chatContext;
+
         setSelectedGroup(group);
         setSelectedFriend(null);
+        setDms([]);
+        setHasMoreMessages(false);
+        setIsLoadingMoreMessages(false);
         // Close group profile when selecting group for chat (not for viewing profile)
         // setSelectedGroupProfile(null); // Don't close here, as this is for chat, not profile view
 
         try {
-            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${group.id}/messages`, {
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${group.id}/messages?limit=20`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
+
+            // Verify we're still viewing the same chat
+            if (currentChatContextRef.current?.type !== 'group' || currentChatContextRef.current?.id !== group.id) {
+                return;
+            }
 
             const messagesWithAvatar = response.data.map((message) => ({
                 ...message,
                 self: message.senderId === userId,
                 avatar: message.avatar || DEFAULT_AVATAR,
+                messageType: message.messageType || 'text',
             }));
 
-            setDms(messagesWithAvatar);
+            // Sort messages by timestamp (oldest first for display)
+            const sortedMessages = messagesWithAvatar.sort((a, b) => {
+                return new Date(a.timestamp) - new Date(b.timestamp);
+            });
+
+            setDms(sortedMessages);
+            setHasMoreMessages(response.data.length === 20);
         } catch (error) {
             if (error.response?.status === 401) {
                 console.error('Unauthorized! Clearing token.');
@@ -1218,21 +1285,36 @@ function App() {
     const handleSelectFriend = async (friend) => {
         if (!token || !friend) return;
 
+        // Update chat context ref immediately
+        const chatContext = { type: friend.isSelf ? 'self' : 'friend', id: friend.isSelf ? userId : friend.id };
+        currentChatContextRef.current = chatContext;
+
         // Close group profile when selecting a friend
         setSelectedGroupProfile(null);
+        setDms([]);
+        setHasMoreMessages(false);
+        setIsLoadingMoreMessages(false);
 
         if (friend.isSelf) {
             setSelectedFriend(friend);
+            setSelectedGroup(null);
             try {
-                const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/dm/${userId}`, {
+                const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/dm/${userId}?limit=20`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
+
+                // Verify we're still viewing the same chat
+                if (currentChatContextRef.current?.type !== 'self' || currentChatContextRef.current?.id !== userId) {
+                    return;
+                }
+
                 const messagesWithAvatar = response.data.map((message) => ({
                     ...message,
                     self: true,
                     avatar: avatar || DEFAULT_AVATAR,
                 }));
                 setDms(messagesWithAvatar);
+                setHasMoreMessages(response.data.length === 20);
                 
                 // Update self message state with last message from history
                 if (messagesWithAvatar.length > 0) {
@@ -1256,6 +1338,7 @@ function App() {
         if (!selected) return;
 
         setSelectedFriend(friend);
+        setSelectedGroup(null);
 
         setUnreadMessagesCount((prev) => {
             const updated = { ...prev, [friend.id]: 0 };
@@ -1264,10 +1347,14 @@ function App() {
         });
 
         try {
-            setSelectedFriend(friend);
-            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/dm/${friend.id}`, {
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/dm/${friend.id}?limit=20`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
+
+            // Verify we're still viewing the same chat
+            if (currentChatContextRef.current?.type !== 'friend' || currentChatContextRef.current?.id !== friend.id) {
+                return;
+            }
 
             const messagesWithAvatar = response.data.map((message) => ({
                 ...message,
@@ -1276,6 +1363,7 @@ function App() {
             }));
 
             setDms(messagesWithAvatar);
+            setHasMoreMessages(response.data.length === 20);
         } catch (error) {
             if (error.response?.status === 401) {
                 console.error('Unauthorized! Clearing token.');
@@ -1283,6 +1371,136 @@ function App() {
             } else {
                 console.error('Error fetching DMs:', error);
             }
+        }
+    };
+
+    const handleLoadMoreMessages = async (beforeId) => {
+        if (isLoadingMoreMessages || !beforeId || !hasMoreMessages) return;
+
+        setIsLoadingMoreMessages(true);
+
+        // Capture current context at the start
+        const contextAtStart = currentChatContextRef.current;
+        if (!contextAtStart) {
+            setIsLoadingMoreMessages(false);
+            return;
+        }
+
+        try {
+            let response;
+
+            if (contextAtStart.type === 'group') {
+                // Load more group messages
+                response = await axios.get(
+                    `${process.env.REACT_APP_SERVER_DOMAIN}/groups/${contextAtStart.id}/messages?limit=20&before_id=${beforeId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                // Verify we're still viewing the same chat
+                if (currentChatContextRef.current?.type !== 'group' || currentChatContextRef.current?.id !== contextAtStart.id) {
+                    setIsLoadingMoreMessages(false);
+                    return;
+                }
+
+                const messagesWithAvatar = response.data.map((message) => ({
+                    ...message,
+                    self: message.senderId === userId,
+                    avatar: message.avatar || DEFAULT_AVATAR,
+                    messageType: message.messageType || 'text',
+                }));
+
+                // Sort messages by timestamp (oldest first for display)
+                const sortedMessages = messagesWithAvatar.sort((a, b) => {
+                    return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+                });
+
+                // Prepend new messages to existing messages
+                setDms((prevDms) => {
+                    const combined = [...sortedMessages, ...prevDms];
+                    // Remove duplicates by id
+                    const unique = combined.filter((msg, index, self) => {
+                        return index === self.findIndex(m => m.id === msg.id);
+                    });
+                    return unique.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                });
+
+                setHasMoreMessages(response.data.length === 20);
+            } else if (contextAtStart.type === 'self') {
+                // Load more self DMs
+                response = await axios.get(
+                    `${process.env.REACT_APP_SERVER_DOMAIN}/dm/${userId}?limit=20&before_id=${beforeId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                // Verify we're still viewing the same chat
+                if (currentChatContextRef.current?.type !== 'self' || currentChatContextRef.current?.id !== userId) {
+                    setIsLoadingMoreMessages(false);
+                    return;
+                }
+
+                const messagesWithAvatar = response.data.map((message) => ({
+                    ...message,
+                    self: true,
+                    avatar: avatar || DEFAULT_AVATAR,
+                }));
+
+                // Sort messages by timestamp (oldest first for display)
+                const sortedMessages = messagesWithAvatar.sort((a, b) => {
+                    return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+                });
+
+                // Prepend new messages to existing messages
+                setDms((prevDms) => {
+                    const combined = [...sortedMessages, ...prevDms];
+                    // Remove duplicates by id
+                    const unique = combined.filter((msg, index, self) => {
+                        return index === self.findIndex(m => m.id === msg.id);
+                    });
+                    return unique.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                });
+
+                setHasMoreMessages(response.data.length === 20);
+            } else if (contextAtStart.type === 'friend') {
+                // Load more friend DMs
+                response = await axios.get(
+                    `${process.env.REACT_APP_SERVER_DOMAIN}/dm/${contextAtStart.id}?limit=20&before_id=${beforeId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                // Verify we're still viewing the same chat
+                if (currentChatContextRef.current?.type !== 'friend' || currentChatContextRef.current?.id !== contextAtStart.id) {
+                    setIsLoadingMoreMessages(false);
+                    return;
+                }
+
+                const messagesWithAvatar = response.data.map((message) => ({
+                    ...message,
+                    self: message.senderId === userId,
+                    avatar: message.senderId === userId ? DEFAULT_AVATAR : (selectedFriend?.avatar || DEFAULT_AVATAR),
+                }));
+
+                // Sort messages by timestamp (oldest first for display)
+                const sortedMessages = messagesWithAvatar.sort((a, b) => {
+                    return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+                });
+
+                // Prepend new messages to existing messages
+                setDms((prevDms) => {
+                    const combined = [...sortedMessages, ...prevDms];
+                    // Remove duplicates by id
+                    const unique = combined.filter((msg, index, self) => {
+                        return index === self.findIndex(m => m.id === msg.id);
+                    });
+                    return unique.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                });
+
+                setHasMoreMessages(response.data.length === 20);
+            }
+
+            setIsLoadingMoreMessages(false);
+        } catch (error) {
+            console.error('Error loading more messages:', error);
+            setIsLoadingMoreMessages(false);
         }
     };
 
@@ -2324,6 +2542,9 @@ function App() {
                                         onSendMessage={handleSendDM}
                                         onToggleEmojiPanel={handleToggleEmojiPanel}
                                         imageQueue={imageQueue}
+                                        onLoadMoreMessages={handleLoadMoreMessages}
+                                        hasMoreMessages={hasMoreMessages}
+                                        isLoadingMoreMessages={isLoadingMoreMessages}
                                         onAddImageToQueue={addImageToQueue}
                                         onRemoveImageFromQueue={removeImageFromQueue}
                                         replyTo={replyTo}
@@ -2458,6 +2679,9 @@ function App() {
                                             replyTo={replyTo}
                                             onCancelReply={() => setReplyTo(null)}
                                             onAvatarClick={handleAvatarClick}
+                                            onLoadMoreMessages={handleLoadMoreMessages}
+                                            hasMoreMessages={hasMoreMessages}
+                                            isLoadingMoreMessages={isLoadingMoreMessages}
                                         />
                                         <MessageInput
                                             input={input}

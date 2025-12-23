@@ -123,7 +123,7 @@ CREATE TABLE group_messages (
     sender_id INT NOT NULL,
     text TEXT NOT NULL,
     image_url VARCHAR(500) DEFAULT NULL,
-    message_type ENUM('text', 'image', 'both') DEFAULT 'text',
+    message_type ENUM('text', 'image', 'both', 'system') DEFAULT 'text',
     reply_to_id INT DEFAULT NULL,
     reply_to_data TEXT DEFAULT NULL,
     is_emoji TINYINT(1) DEFAULT 0,
