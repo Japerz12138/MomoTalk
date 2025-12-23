@@ -92,7 +92,6 @@ CREATE INDEX idx_dms_user_timestamp ON dms (sender_id, timestamp DESC);
 CREATE INDEX idx_dms_receiver_timestamp ON dms (receiver_id, timestamp DESC);
 
 -- NEW ADDED FOR GROUPS - 12/22/2025
-
 CREATE TABLE groups (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,

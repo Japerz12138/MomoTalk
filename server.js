@@ -590,10 +590,10 @@ io.on('connection', (socket) => {
                 db.query(query, [groupId, senderId, encryptedText, hasImage ? imageUrl : null, messageType, replyToId, replyToData, isEmoji ? 1 : 0], (err, insertResult) => {
                     if (!err) {
                         const messageId = insertResult.insertId;
-                        const userQuery = 'SELECT nickname, avatar FROM users WHERE id = ?';
+                        const userQuery = 'SELECT nickname, avatar, momo_code FROM users WHERE id = ?';
                         db.query(userQuery, [senderId], (userErr, userResults) => {
                             if (!userErr && userResults.length > 0) {
-                                const { nickname, avatar } = userResults[0];
+                                const { nickname, avatar, momo_code } = userResults[0];
 
                                 let finalReplyTo = null;
                                 if (replyToId) {
@@ -632,6 +632,7 @@ io.on('connection', (socket) => {
                                         timestamp: new Date().toISOString(),
                                         nickname,
                                         avatar,
+                                        momoCode: momo_code || null,
                                         replyTo: replyToInfo,
                                         clientId,
                                         isEmoji: Boolean(isEmoji)
@@ -2192,7 +2193,7 @@ app.get('/groups/:groupId/messages', authenticateToken, (req, res) => {
                        gm.reply_to_id AS replyToId, gm.reply_to_data AS replyToData,
                        gm.is_emoji AS isEmoji,
                        (gm.sender_id = ?) AS self,
-                       u.nickname, u.avatar,
+                       u.nickname, u.avatar, u.momo_code AS momoCode,
                        reply_msg.text AS replyText, reply_msg.image_url AS replyImageUrl, reply_msg.sender_id AS replySenderId
                 FROM group_messages gm
                 LEFT JOIN users u ON gm.sender_id = u.id
@@ -2209,7 +2210,7 @@ app.get('/groups/:groupId/messages', authenticateToken, (req, res) => {
                        gm.reply_to_id AS replyToId, gm.reply_to_data AS replyToData,
                        gm.is_emoji AS isEmoji,
                        (gm.sender_id = ?) AS self,
-                       u.nickname, u.avatar,
+                       u.nickname, u.avatar, u.momo_code AS momoCode,
                        reply_msg.text AS replyText, reply_msg.image_url AS replyImageUrl, reply_msg.sender_id AS replySenderId
                 FROM group_messages gm
                 LEFT JOIN users u ON gm.sender_id = u.id

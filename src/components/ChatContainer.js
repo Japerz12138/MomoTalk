@@ -5,7 +5,7 @@ import MessageInput from './MessageInput';
 import { getFullImageUrl } from '../utils/imageHelper';
 import { useTranslation } from 'react-i18next';
 
-const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue, onReply, onDeleteMessage, replyTo, onCancelReply }) => {
+const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue, onReply, onDeleteMessage, replyTo, onCancelReply, onAvatarClick }) => {
     const chatEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const { t } = useTranslation();
@@ -341,10 +341,14 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                 onMouseEnter={() => setHoveredMessageIndex(index)}
                                 onMouseLeave={() => setHoveredMessageIndex(null)}
                                 onContextMenu={(e) => handleContextMenu(e, message)}
-                                style={{ position: 'relative' }}
+                                style={{ position: 'relative', marginTop: friend?.isGroup && !message.self ? '8px' : '0' }}
                             >
                                 <div
                                     className={`d-flex ${message.self ? 'justify-content-end' : 'align-items-start'}`}
+                                    style={{ 
+                                        maxWidth: '70%',
+                                        marginLeft: message.self ? 'auto' : '0'
+                                    }}
                                 >
                                     {!message.self && (
                                         <img
@@ -353,10 +357,36 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                             width="40"
                                             height="40"
                                             className="rounded-circle me-2"
-                                            style={{ objectFit: 'cover', objectPosition: 'center' }}
+                                            style={{ 
+                                                objectFit: 'cover', 
+                                                objectPosition: 'center', 
+                                                flexShrink: 0,
+                                                cursor: 'pointer'
+                                            }}
+                                            onClick={() => onAvatarClick && onAvatarClick(message.senderId)}
                                         />
                                     )}
-                                    <div className={`chat-bubble ${message.self ? 'self' : 'other'}`} style={{ position: 'relative' }}>
+                                    <div
+                                        className={`d-flex flex-column ${message.self ? 'align-items-end' : 'align-items-start'}`}
+                                        style={{ 
+                                            flex: 1, 
+                                            minWidth: 0,
+                                            maxWidth: '100%'
+                                        }}
+                                    >
+                                        {/* Show name */}
+                                        {friend?.isGroup && !message.self && message.nickname && (
+                                            <div style={{
+                                                fontSize: '0.9rem',
+                                                color: '#495A6E',
+                                                marginBottom: '4px',
+                                                fontWeight: 500,
+                                                lineHeight: '1.2'
+                                            }}>
+                                                {message.nickname}
+                                            </div>
+                                        )}
+                                        <div className={`chat-bubble ${message.self ? 'self' : 'other'}`} style={{ position: 'relative', width: 'fit-content', maxWidth: '100%' }}>
                                         {message.replyTo && (
                                             <div style={{
                                                 padding: '8px',
@@ -439,6 +469,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                                             </div>
                                         )}
                                         {message.text && <div>{message.text}</div>}
+                                    </div>
                                     </div>
                                 </div>
                                 {hoveredMessageIndex === index && (

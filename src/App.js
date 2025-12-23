@@ -50,6 +50,8 @@ function App() {
     const [friendRequests, setFriendRequests] = useState([]);
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [selectedGroup, setSelectedGroup] = useState(null);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [isSelectedUserFriend, setIsSelectedUserFriend] = useState(false);
     const [dms, setDms] = useState([]);
     const [showMenu, setShowMenu] = useState(false);
     const [error, setError] = useState('');
@@ -567,6 +569,7 @@ function App() {
                 ...message,
                 self: message.senderId === userId,
                 avatar: message.avatar || DEFAULT_AVATAR,
+                momoCode: message.momoCode || null,
             };
 
             //for real time display
@@ -1093,6 +1096,37 @@ function App() {
             } else {
                 console.error('Error fetching group messages:', error);
             }
+        }
+    };
+
+    const handleAvatarClick = async (userIdToShow) => {
+        if (!token || !userIdToShow || userIdToShow === userId) return;
+
+        // Check if user exists in friends list
+        const isFriend = friends.some(friend => friend.id === userIdToShow);
+        
+        // Try to get from friends list first
+        let userInfo = friends.find(friend => friend.id === userIdToShow);
+        
+        if (!userInfo) {
+            // If not in friends, get from current messages
+            const message = dms.find(msg => msg.senderId === userIdToShow);
+            if (message) {
+                userInfo = {
+                    id: userIdToShow,
+                    nickname: message.nickname,
+                    username: message.nickname,
+                    avatar: message.avatar || DEFAULT_AVATAR,
+                    signature: '',
+                    birthday: null, // Won't show if not friend
+                    momoCode: message.momoCode || null
+                };
+            }
+        }
+        
+        if (userInfo) {
+            setSelectedUser(userInfo);
+            setIsSelectedUserFriend(isFriend);
         }
     };
 
@@ -2189,6 +2223,7 @@ function App() {
                                         onCancelReply={() => setReplyTo(null)}
                                         onReply={(message) => setReplyTo(message)}
                                         onDeleteMessage={handleDeleteMessage}
+                                        onAvatarClick={handleAvatarClick}
                                     />
                                 </div>
                             )}
@@ -2314,6 +2349,7 @@ function App() {
                                             onToggleEmojiPanel={handleToggleEmojiPanel}
                                             replyTo={replyTo}
                                             onCancelReply={() => setReplyTo(null)}
+                                            onAvatarClick={handleAvatarClick}
                                         />
                                         <MessageInput
                                             input={input}
@@ -2425,6 +2461,124 @@ function App() {
                         />
                     )}
                 </>
+            )}
+
+            {/* User Profile Modal for clicked avatar */}
+            {selectedUser && (
+                <div 
+                    style={{ 
+                        position: 'fixed', 
+                        top: 0, 
+                        left: 0, 
+                        right: 0, 
+                        bottom: 0, 
+                        zIndex: 1200, 
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: isMobile ? '20px' : '40px'
+                    }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setSelectedUser(null);
+                        }
+                    }}
+                >
+                    <div 
+                        style={{
+                            backgroundColor: 'white',
+                            borderRadius: '12px',
+                            width: '100%',
+                            maxWidth: isMobile ? '100%' : '500px',
+                            maxHeight: '90vh',
+                            overflowY: 'auto',
+                            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+                            position: 'relative',
+                            paddingBottom: '20px'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setSelectedUser(null)}
+                            style={{
+                                position: 'absolute',
+                                top: '12px',
+                                right: '12px',
+                                background: 'rgba(0, 0, 0, 0.1)',
+                                border: 'none',
+                                borderRadius: '50%',
+                                width: '32px',
+                                height: '32px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                zIndex: 10,
+                                fontSize: '18px',
+                                color: '#495A6E'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+                            }}
+                        >
+                            <i className="bi bi-x"></i>
+                        </button>
+                        <div style={{ padding: '0px', paddingBottom: '5px' }}>
+                            <UserProfile
+                                user={selectedUser}
+                                isOwnProfile={false}
+                                showBirthday={isSelectedUserFriend}
+                                onSendMessage={isSelectedUserFriend ? () => {
+                                    // Find or create friend and switch to chat
+                                    const friend = friends.find(f => f.id === selectedUser.id);
+                                    if (friend) {
+                                        handleSelectFriend(friend);
+                                        setActiveSection('chat');
+                                    }
+                                    setSelectedUser(null);
+                                } : undefined}
+                                onRemoveFriend={isSelectedUserFriend ? () => {
+                                    handleRemoveFriend(selectedUser.id);
+                                    setSelectedUser(null);
+                                } : undefined}
+                                onAddFriend={!isSelectedUserFriend ? async () => {
+                                    // Get user's momo code to add as friend
+                                    try {
+                                        let momoCode = selectedUser.momoCode;
+                                        
+                                        if (!momoCode) {
+                                            // Try to get from friends list or message
+                                            const friend = friends.find(f => f.id === selectedUser.id);
+                                            momoCode = friend?.momoCode;
+                                            
+                                            if (!momoCode) {
+                                                // Try to get from current messages
+                                                const message = dms.find(msg => msg.senderId === selectedUser.id);
+                                                momoCode = message?.momoCode;
+                                            }
+                                        }
+                                        
+                                        if (!momoCode) {
+                                            handleShowToast(t('toast.error'), '无法获取用户Momo Code，请通过搜索添加好友');
+                                            return;
+                                        }
+                                        
+                                        await handleAddFriend(momoCode);
+                                        setSelectedUser(null);
+                                    } catch (error) {
+                                        console.error('Error adding friend:', error);
+                                    }
+                                } : undefined}
+                                onClose={() => setSelectedUser(null)}
+                                isMobile={false}
+                            />
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

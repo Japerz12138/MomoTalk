@@ -6,7 +6,7 @@ import { DEFAULT_AVATAR } from '../constants';
 import ImageUpload from './ImageUpload';
 import { getFullImageUrl } from '../utils/imageHelper';
 
-const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpdateProfile, onClose, isMobile }) => {
+const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onAddFriend, onUpdateProfile, onClose, isMobile, showBirthday = true }) => {
     const { t, i18n } = useTranslation();
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState('');
@@ -153,6 +153,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                 maxWidth: '400px', 
                 boxShadow: isMobile ? 'none' : '0px 4px 8px rgba(0, 0, 0, 0.2)', 
                 marginTop: isMobile ? '16px' : 'var(--header-height, 69px)', 
+                marginBottom: isMobile ? '16px' : '20px',
                 marginLeft: isMobile ? '16px' : 'auto',
                 marginRight: isMobile ? '16px' : 'auto',
                 border: 'none',
@@ -214,7 +215,7 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
                     <p className="text-muted" style={{ fontSize: '0.95rem', marginTop: isOwnProfile ? '5px' : '10px' }}>
                         {user.signature || (isOwnProfile ? t('profile.noSignature') : '')}
                     </p>
-                    {user.birthday && (
+                    {user.birthday && showBirthday && (
                         <div style={{
                             marginTop: '10px',
                             marginBottom: '10px',
@@ -279,15 +280,23 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onUpda
 
                     {!isOwnProfile && (
                         <div className="d-grid gap-2 mt-3">
-                            <button className="btn custom-btn" onClick={onSendMessage}>
-                                {t('profile.sendMessage')}
-                            </button>
-                            <button
-                                className="btn btn-danger"
-                                onClick={() => setShowRemoveFriendModal(true)}
-                            >
-                                {user.isSelf ? t('profile.clearChatHistory') : t('profile.removeFriend')}
-                            </button>
+                            {onAddFriend ? (
+                                <button className="btn custom-btn" onClick={onAddFriend}>
+                                    {t('profile.addFriend', '添加好友')}
+                                </button>
+                            ) : (
+                                <>
+                                    <button className="btn custom-btn" onClick={onSendMessage}>
+                                        {t('profile.sendMessage')}
+                                    </button>
+                                    <button
+                                        className="btn btn-danger"
+                                        onClick={() => setShowRemoveFriendModal(true)}
+                                    >
+                                        {user.isSelf ? t('profile.clearChatHistory') : t('profile.removeFriend')}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
