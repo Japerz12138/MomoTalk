@@ -96,10 +96,13 @@ CREATE TABLE groups (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     avatar VARCHAR(500) DEFAULT NULL,
+    group_code VARCHAR(14) NOT NULL UNIQUE,
+    signature VARCHAR(200) DEFAULT NULL,
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_created_by (created_by)
+    INDEX idx_created_by (created_by),
+    INDEX idx_group_code (group_code)
 );
 
 CREATE TABLE group_members (

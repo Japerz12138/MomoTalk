@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
 
-const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onCreateGroup, onJoinGroup, userId, nickname, avatar, showMultiDevice = true }) => {
+const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onShowGroupProfile, onCreateGroup, onJoinGroup, userId, nickname, avatar, showMultiDevice = true, isMobile = false }) => {
     const { t } = useTranslation();
     const [selectedFriendId, setSelectedFriendId] = useState(null);
     const [selectedGroupId, setSelectedGroupId] = useState(null);
@@ -21,7 +21,11 @@ const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onCre
     const handleSelectGroup = (group) => {
         setSelectedGroupId(group.id);
         setSelectedFriendId(null);
-        if (onSelectGroup) onSelectGroup(group);
+        if (onShowGroupProfile) {
+            onShowGroupProfile(group);
+        } else if (onSelectGroup) {
+            onSelectGroup(group);
+        }
     };
 
     const handleCreateGroup = () => {
@@ -34,7 +38,14 @@ const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onCre
 
     const handleJoinGroup = () => {
         if (joinGroupId.trim()) {
-            onJoinGroup(parseInt(joinGroupId.trim()));
+            // Remove spaces and dashes for flexible input
+            const cleanCode = joinGroupId.trim().replace(/[\s-]/g, '');
+            // Format with dashes if 12 digits
+            let formattedCode = cleanCode;
+            if (cleanCode.length === 12) {
+                formattedCode = `${cleanCode.substring(0, 4)}-${cleanCode.substring(4, 8)}-${cleanCode.substring(8, 12)}`;
+            }
+            onJoinGroup(formattedCode);
             setJoinGroupId('');
             setShowGroupModal(false);
         }
@@ -168,9 +179,9 @@ const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onCre
                             <label>{t('friendList.joinGroup', '加入群组')}</label>
                             <div className="input-group">
                                 <input
-                                    type="number"
+                                    type="text"
                                     className="form-control"
-                                    placeholder={t('friendList.groupId', '群组ID')}
+                                    placeholder={t('friendList.groupCode', '群组号 (xxxx-xxxx-xxxx)')}
                                     value={joinGroupId}
                                     onChange={(e) => setJoinGroupId(e.target.value)}
                                 />
@@ -280,8 +291,7 @@ const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onCre
                         </div>
                     </button>
                 ))}
-                {filteredFriends.length > 0 ? (
-                    filteredFriends.map((friend) => (
+                {filteredFriends.map((friend) => (
                     <button
                         key={friend.id}
                         type="button"
@@ -337,36 +347,39 @@ const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onCre
                             )}
                         </div>
                     </button>
-                ))
-            ) : friends.length === 0 && groups.length === 0 ? (
-                <div
-                    className="d-flex flex-column align-items-center justify-content-center text-muted"
-                    style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                    }}
-                >
-                    <i className="bi bi-plus-circle-dotted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
-                    <div style={{ marginTop: '10px' }}>{t('friendList.noFriends')}</div>
-                </div>
-            ) : (
-                <div
-                    className="d-flex flex-column align-items-center justify-content-center text-muted"
-                    style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                    }}
-                >
-                    <i className="bi bi-search" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
-                    <div style={{ marginTop: '10px' }}>{t('friendList.noResults', { query: searchQuery })}</div>
-                </div>
-            )}
+                ))}
+                {/* Show empty state only if no groups, no friends, and no multi-device option */}
+                {filteredGroups.length === 0 && filteredFriends.length === 0 && !(userId && showMultiDevice) && (
+                    friends.length === 0 && groups.length === 0 ? (
+                        <div
+                            className="d-flex flex-column align-items-center justify-content-center text-muted"
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                            }}
+                        >
+                            <i className="bi bi-plus-circle-dotted" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                            <div style={{ marginTop: '10px' }}>{t('friendList.noFriends')}</div>
+                        </div>
+                    ) : searchQuery.trim() ? (
+                        <div
+                            className="d-flex flex-column align-items-center justify-content-center text-muted"
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                            }}
+                        >
+                            <i className="bi bi-search" style={{ fontSize: '3rem', opacity: 0.5 }}></i>
+                            <div style={{ marginTop: '10px' }}>{t('friendList.noResults', { query: searchQuery })}</div>
+                        </div>
+                    ) : null
+                )}
             </div>
         </div>
     );

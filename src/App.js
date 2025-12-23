@@ -12,6 +12,7 @@ import FriendRequests from './components/FriendRequests';
 import Sidebar from './components/Sidebar';
 import ToastContainer from "./components/ToastContainer";
 import UserProfile from "./components/UserProfile";
+import GroupProfile from "./components/GroupProfile";
 import SettingsPage from "./components/SettingsPage";
 import EmojiPanel from "./components/EmojiPanel";
 import './App.css';
@@ -52,6 +53,7 @@ function App() {
     const [selectedGroup, setSelectedGroup] = useState(null);
     const [selectedUser, setSelectedUser] = useState(null);
     const [isSelectedUserFriend, setIsSelectedUserFriend] = useState(false);
+    const [selectedGroupProfile, setSelectedGroupProfile] = useState(null);
     const [dms, setDms] = useState([]);
     const [showMenu, setShowMenu] = useState(false);
     const [error, setError] = useState('');
@@ -287,14 +289,15 @@ function App() {
             const uniqueFriends = response.data.filter((friend, index, self) =>
                 index === self.findIndex(f => f.id === friend.id)
             );
-            // Sort friends: online first, then by lastMessageTime (most recent first)
+            // Sort friends: online first, then by lastSeen (most recent first)
             const sortedFriends = uniqueFriends.sort((a, b) => {
                 if (a.isOnline !== b.isOnline) {
                     return b.isOnline ? 1 : -1; // Online users first
                 }
-                const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : (a.addedAt ? new Date(a.addedAt).getTime() : 0);
-                const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : (b.addedAt ? new Date(b.addedAt).getTime() : 0);
-                return timeB - timeA; // Descending order (newest first)
+                // Sort by lastSeen (last online time), most recent first
+                const timeA = a.lastSeen ? new Date(a.lastSeen).getTime() : 0;
+                const timeB = b.lastSeen ? new Date(b.lastSeen).getTime() : 0;
+                return timeB - timeA; // Descending order (most recent first)
             });
             setFriends(sortedFriends);
             
@@ -1054,9 +1057,9 @@ function App() {
         }
     };
 
-    const handleJoinGroup = async (groupId) => {
+    const handleJoinGroup = async (groupCode) => {
         try {
-            await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/join`, { groupId }, {
+            await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/join`, { groupCode }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             handleShowToast(t('toast.success'), '加入群组成功');
@@ -1076,6 +1079,8 @@ function App() {
 
         setSelectedGroup(group);
         setSelectedFriend(null);
+        // Close group profile when selecting group for chat (not for viewing profile)
+        // setSelectedGroupProfile(null); // Don't close here, as this is for chat, not profile view
 
         try {
             const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${group.id}/messages`, {
@@ -1130,8 +1135,91 @@ function App() {
         }
     };
 
+    const handleShowGroupProfile = async (group) => {
+        if (!token || !group) return;
+
+        // Close friend profile when showing group profile
+        setSelectedFriend(null);
+
+        try {
+            const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${group.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setSelectedGroupProfile({
+                ...response.data,
+                isCreator: response.data.created_by === userId
+            });
+        } catch (error) {
+            console.error('Error fetching group details:', error);
+            // Fallback to basic group info
+            setSelectedGroupProfile({
+                ...group,
+                isCreator: group.created_by === userId
+            });
+        }
+    };
+
+    const handleUpdateGroup = async ({ name, avatar, signature }) => {
+        if (!token || !selectedGroupProfile) return;
+
+        try {
+            await axios.put(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${selectedGroupProfile.id}`, 
+                { name, avatar, signature },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setSelectedGroupProfile({ ...selectedGroupProfile, name, avatar, signature });
+            // Update groups list
+            setGroups(groups.map(g => g.id === selectedGroupProfile.id ? { ...g, name, avatar, signature } : g));
+            handleShowToast(t('toast.success'), '群组信息已更新');
+        } catch (error) {
+            console.error('Error updating group:', error);
+            handleShowToast(t('toast.error'), error.response?.data?.error || '更新失败');
+        }
+    };
+
+    const handleLeaveGroup = async () => {
+        if (!token || !selectedGroupProfile) return;
+
+        if (!window.confirm('确定要退出该群组吗？')) return;
+
+        try {
+            await axios.post(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${selectedGroupProfile.id}/leave`, 
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            handleShowToast(t('toast.success'), '已退出群组');
+            setSelectedGroupProfile(null);
+            fetchGroups();
+        } catch (error) {
+            console.error('Error leaving group:', error);
+            handleShowToast(t('toast.error'), error.response?.data?.error || '退出失败');
+        }
+    };
+
+    const handleDisbandGroup = async () => {
+        if (!token || !selectedGroupProfile) return;
+
+        if (!window.confirm('确定要解散该群组吗？此操作不可撤销！')) return;
+
+        try {
+            await axios.delete(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${selectedGroupProfile.id}`, 
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            handleShowToast(t('toast.success'), '群组已解散');
+            setSelectedGroupProfile(null);
+            setSelectedGroup(null);
+            fetchGroups();
+        } catch (error) {
+            console.error('Error disbanding group:', error);
+            handleShowToast(t('toast.error'), error.response?.data?.error || '解散失败');
+        }
+    };
+
     const handleSelectFriend = async (friend) => {
         if (!token || !friend) return;
+
+        // Close group profile when selecting a friend
+        setSelectedGroupProfile(null);
 
         if (friend.isSelf) {
             setSelectedFriend(friend);
@@ -2046,7 +2134,7 @@ function App() {
                                     </div>
                                 )}
 
-                                {activeSection === 'friend-list' && !selectedFriend && (
+                                {activeSection === 'friend-list' && !selectedFriend && !selectedGroupProfile && (
                                     <div className="mobile-friend-list" style={{ height: '100%', overflow: 'auto' }}>
                                         <FriendList
                                             friends={friends}
@@ -2098,6 +2186,25 @@ function App() {
                                                 setSelectedFriend(null);
                                             }}
                                             onClose={() => setSelectedFriend(null)}
+                                            isMobile={true}
+                                        />
+                                    </div>
+                                )}
+
+                                {activeSection === 'friend-list' && selectedGroupProfile && (
+                                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1100, background: 'white', overflowY: 'auto' }}>
+                                        <GroupProfile
+                                            group={selectedGroupProfile}
+                                            userId={userId}
+                                            isCreator={selectedGroupProfile.isCreator}
+                                            onSendMessage={() => {
+                                                handleSelectGroup(selectedGroupProfile);
+                                                setActiveSection('chat');
+                                            }}
+                                            onLeaveGroup={handleLeaveGroup}
+                                            onDisbandGroup={handleDisbandGroup}
+                                            onUpdateGroup={handleUpdateGroup}
+                                            onClose={() => setSelectedGroupProfile(null)}
                                             isMobile={true}
                                         />
                                     </div>
@@ -2296,6 +2403,7 @@ function App() {
                                             handleSelectFriend(friend);
                                         }}
                                         onSelectGroup={handleSelectGroup}
+                                        onShowGroupProfile={handleShowGroupProfile}
                                         onCreateGroup={handleCreateGroup}
                                         onJoinGroup={handleJoinGroup}
                                         userId={userId}
@@ -2374,7 +2482,7 @@ function App() {
                                         )}
                                     </>
                                 )}
-                                {activeSection === 'friend-list' && selectedFriend && (
+                                {activeSection === 'friend-list' && selectedFriend && !selectedGroupProfile && (
                                     <UserProfile
                                         user={selectedFriend}
                                         isOwnProfile={false}
@@ -2400,6 +2508,22 @@ function App() {
                                             handleRemoveFriend(selectedFriend.id);
                                             setSelectedFriend(null);
                                         }}
+                                    />
+                                )}
+                                {activeSection === 'friend-list' && selectedGroupProfile && !selectedFriend && (
+                                    <GroupProfile
+                                        group={selectedGroupProfile}
+                                        userId={userId}
+                                        isCreator={selectedGroupProfile.isCreator}
+                                        onSendMessage={() => {
+                                            handleSelectGroup(selectedGroupProfile);
+                                            setActiveSection('chat');
+                                        }}
+                                        onLeaveGroup={handleLeaveGroup}
+                                        onDisbandGroup={handleDisbandGroup}
+                                        onUpdateGroup={handleUpdateGroup}
+                                        onClose={() => setSelectedGroupProfile(null)}
+                                        isMobile={false}
                                     />
                                 )}
                                 {activeSection === 'profile' && (
@@ -2462,6 +2586,7 @@ function App() {
                     )}
                 </>
             )}
+
 
             {/* User Profile Modal for clicked avatar */}
             {selectedUser && (

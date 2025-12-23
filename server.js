@@ -427,6 +427,22 @@ async function generateUniqueMomoCode() {
     return momoCode;
 }
 
+async function generateUniqueGroupCode() {
+    let groupCode;
+    let isUnique = false;
+    
+    while (!isUnique) {
+        groupCode = generateMomoCode(); // Reuse the same format
+        // Check if this code already exists
+        const [rows] = await db.promise().query('SELECT id FROM groups WHERE group_code = ?', [groupCode]);
+        if (rows.length === 0) {
+            isUnique = true;
+        }
+    }
+    
+    return groupCode;
+}
+
 // Socket.io configuration
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -2061,7 +2077,7 @@ app.delete('/emojis/favorite/:id', authenticateToken, (req, res) => {
 });
 
 // Group Messages routes queries
-app.post('/groups/create', authenticateToken, (req, res) => {
+app.post('/groups/create', authenticateToken, async (req, res) => {
     const { name } = req.body;
     const userId = req.user.userId;
 
@@ -2069,44 +2085,52 @@ app.post('/groups/create', authenticateToken, (req, res) => {
         return res.status(400).json({ error: 'Group name is required' });
     }
 
-    const createGroupQuery = 'INSERT INTO groups (name, created_by) VALUES (?, ?)';
-    db.query(createGroupQuery, [name.trim(), userId], (err, result) => {
-        if (err) {
-            console.error('Error creating group:', err.message);
-            return res.status(500).json({ error: 'Failed to create group' });
-        }
-
-        const groupId = result.insertId;
-        // Add creator as member
-        const addMemberQuery = 'INSERT INTO group_members (group_id, user_id) VALUES (?, ?)';
-        db.query(addMemberQuery, [groupId, userId], (memberErr) => {
-            if (memberErr) {
-                console.error('Error adding creator to group:', memberErr.message);
-                return res.status(500).json({ error: 'Failed to add creator to group' });
+    try {
+        const groupCode = await generateUniqueGroupCode();
+        const createGroupQuery = 'INSERT INTO groups (name, group_code, created_by) VALUES (?, ?, ?)';
+        db.query(createGroupQuery, [name.trim(), groupCode, userId], (err, result) => {
+            if (err) {
+                console.error('Error creating group:', err.message);
+                return res.status(500).json({ error: 'Failed to create group' });
             }
 
-            res.json({ message: 'Group created successfully', groupId });
+            const groupId = result.insertId;
+            // Add creator as member
+            const addMemberQuery = 'INSERT INTO group_members (group_id, user_id) VALUES (?, ?)';
+            db.query(addMemberQuery, [groupId, userId], (memberErr) => {
+                if (memberErr) {
+                    console.error('Error adding creator to group:', memberErr.message);
+                    return res.status(500).json({ error: 'Failed to add creator to group' });
+                }
+
+                res.json({ message: 'Group created successfully', groupId, groupCode });
+            });
         });
-    });
+    } catch (error) {
+        console.error('Error generating group code:', error);
+        return res.status(500).json({ error: 'Failed to create group' });
+    }
 });
 
 app.post('/groups/join', authenticateToken, (req, res) => {
-    const { groupId } = req.body;
+    const { groupCode } = req.body;
     const userId = req.user.userId;
 
-    if (!groupId) {
-        return res.status(400).json({ error: 'Group ID is required' });
+    if (!groupCode) {
+        return res.status(400).json({ error: 'Group Code is required' });
     }
 
-    // Check if group exists
-    const checkGroupQuery = 'SELECT id FROM groups WHERE id = ?';
-    db.query(checkGroupQuery, [groupId], (err, results) => {
+    // Check if group exists by group_code
+    const checkGroupQuery = 'SELECT id FROM groups WHERE group_code = ?';
+    db.query(checkGroupQuery, [groupCode], (err, results) => {
         if (err) {
             return res.status(500).json({ error: 'Database error' });
         }
         if (results.length === 0) {
             return res.status(404).json({ error: 'Group not found' });
         }
+
+        const groupId = results[0].id;
 
         // Check if already a member
         const checkMemberQuery = 'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?';
@@ -2134,7 +2158,7 @@ app.get('/groups', authenticateToken, (req, res) => {
     const userId = req.user.userId;
 
     const groupsQuery = `
-        SELECT g.id, g.name, g.avatar, g.created_by,
+        SELECT g.id, g.name, g.avatar, g.group_code AS groupCode, g.created_by, g.signature,
                (SELECT gm.text
                 FROM group_messages gm
                 WHERE gm.group_id = g.id
@@ -2165,6 +2189,212 @@ app.get('/groups', authenticateToken, (req, res) => {
         }));
 
         res.json(groupsWithDecrypted);
+    });
+});
+
+app.get('/groups/:groupId', authenticateToken, (req, res) => {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+
+    // Check if user is a member
+    const checkMemberQuery = 'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?';
+    db.query(checkMemberQuery, [groupId, userId], (checkErr, checkResults) => {
+        if (checkErr) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (checkResults.length === 0) {
+            return res.status(403).json({ error: 'Not a member of this group' });
+        }
+
+        const groupQuery = 'SELECT id, name, avatar, group_code AS groupCode, created_by, signature FROM groups WHERE id = ?';
+        db.query(groupQuery, [groupId], (err, results) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            if (results.length === 0) {
+                return res.status(404).json({ error: 'Group not found' });
+            }
+            res.json(results[0]);
+        });
+    });
+});
+
+app.get('/groups/:groupId/members', authenticateToken, (req, res) => {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+
+    // Check if user is a member
+    const checkMemberQuery = 'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?';
+    db.query(checkMemberQuery, [groupId, userId], (checkErr, checkResults) => {
+        if (checkErr) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (checkResults.length === 0) {
+            return res.status(403).json({ error: 'Not a member of this group' });
+        }
+
+        const membersQuery = `
+            SELECT u.id, u.username, u.nickname, u.avatar,
+                   (SELECT MAX(timestamp) 
+                    FROM group_messages 
+                    WHERE group_id = ? AND sender_id = u.id) AS lastMessageTime
+            FROM group_members gm
+            INNER JOIN users u ON gm.user_id = u.id
+            WHERE gm.group_id = ?
+            ORDER BY gm.joined_at ASC
+        `;
+        db.query(membersQuery, [groupId, groupId], (err, results) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            res.json(results);
+        });
+    });
+});
+
+app.put('/groups/:groupId', authenticateToken, (req, res) => {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+    const { name, avatar, signature } = req.body;
+
+    // Check if user is the creator
+    const checkCreatorQuery = 'SELECT created_by FROM groups WHERE id = ?';
+    db.query(checkCreatorQuery, [groupId], (checkErr, checkResults) => {
+        if (checkErr) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (checkResults.length === 0) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+        if (checkResults[0].created_by !== userId) {
+            return res.status(403).json({ error: 'Only creator can update group' });
+        }
+
+        const updates = [];
+        const values = [];
+        if (name !== undefined) {
+            updates.push('name = ?');
+            values.push(name.trim());
+        }
+        if (avatar !== undefined) {
+            updates.push('avatar = ?');
+            values.push(avatar);
+        }
+        if (signature !== undefined) {
+            updates.push('signature = ?');
+            values.push(signature);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        values.push(groupId);
+        const updateQuery = `UPDATE groups SET ${updates.join(', ')} WHERE id = ?`;
+        db.query(updateQuery, values, (err, result) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ message: 'Group updated successfully' });
+        });
+    });
+});
+
+app.post('/groups/:groupId/remove-member', authenticateToken, (req, res) => {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+    const { memberId } = req.body;
+
+    if (!memberId) {
+        return res.status(400).json({ error: 'Member ID is required' });
+    }
+
+    // Check if user is the creator
+    const checkCreatorQuery = 'SELECT created_by FROM groups WHERE id = ?';
+    db.query(checkCreatorQuery, [groupId], (checkErr, checkResults) => {
+        if (checkErr) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (checkResults.length === 0) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+        if (checkResults[0].created_by !== userId) {
+            return res.status(403).json({ error: 'Only creator can remove members' });
+        }
+
+        // Cannot remove creator
+        if (memberId === checkResults[0].created_by) {
+            return res.status(400).json({ error: 'Cannot remove creator' });
+        }
+
+        const removeQuery = 'DELETE FROM group_members WHERE group_id = ? AND user_id = ?';
+        db.query(removeQuery, [groupId, memberId], (err, result) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: 'Member not found in group' });
+            }
+            res.json({ message: 'Member removed successfully' });
+        });
+    });
+});
+
+app.post('/groups/:groupId/leave', authenticateToken, (req, res) => {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+
+    // Check if user is the creator
+    const checkCreatorQuery = 'SELECT created_by FROM groups WHERE id = ?';
+    db.query(checkCreatorQuery, [groupId], (checkErr, checkResults) => {
+        if (checkErr) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (checkResults.length === 0) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+        if (checkResults[0].created_by === userId) {
+            return res.status(400).json({ error: 'Creator cannot leave group. Please disband it instead.' });
+        }
+
+        const leaveQuery = 'DELETE FROM group_members WHERE group_id = ? AND user_id = ?';
+        db.query(leaveQuery, [groupId, userId], (err, result) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: 'Not a member of this group' });
+            }
+            res.json({ message: 'Left group successfully' });
+        });
+    });
+});
+
+app.delete('/groups/:groupId', authenticateToken, (req, res) => {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+
+    // Check if user is the creator
+    const checkCreatorQuery = 'SELECT created_by FROM groups WHERE id = ?';
+    db.query(checkCreatorQuery, [groupId], (checkErr, checkResults) => {
+        if (checkErr) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (checkResults.length === 0) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+        if (checkResults[0].created_by !== userId) {
+            return res.status(403).json({ error: 'Only creator can disband group' });
+        }
+
+        // Delete group (cascade will delete members and messages)
+        const deleteQuery = 'DELETE FROM groups WHERE id = ?';
+        db.query(deleteQuery, [groupId], (err, result) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ message: 'Group disbanded successfully' });
+        });
     });
 });
 

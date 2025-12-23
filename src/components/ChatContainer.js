@@ -279,17 +279,35 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                     >
                         <i className="bi bi-arrow-left"></i>
                     </button>
-                    <img
-                        src={getFullImageUrl(friend?.avatar || DEFAULT_AVATAR)}
-                        alt="avatar"
-                        width="32"
-                        height="32"
-                        className="rounded-circle me-2"
-                        style={{ 
-                            objectFit: 'cover',
-                            border: '2px solid rgba(255, 255, 255, 0.5)'
-                        }}
-                    />
+                    {friend?.isGroup && !friend?.avatar ? (
+                        <div
+                            className="rounded-circle me-2"
+                            style={{
+                                width: '32px',
+                                height: '32px',
+                                backgroundColor: '#e9ecef',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                border: '2px solid rgba(255, 255, 255, 0.5)'
+                            }}
+                        >
+                            <i className="bi bi-people" style={{ fontSize: '16px', color: '#6c757d' }}></i>
+                        </div>
+                    ) : (
+                        <img
+                            src={getFullImageUrl(friend?.avatar || DEFAULT_AVATAR)}
+                            alt="avatar"
+                            width="32"
+                            height="32"
+                            className="rounded-circle me-2"
+                            style={{ 
+                                objectFit: 'cover',
+                                border: '2px solid rgba(255, 255, 255, 0.5)'
+                            }}
+                        />
+                    )}
                     <h6 className="mb-0" style={{ fontSize: '1.25rem', lineHeight: 1 }}>{friend?.nickname || 'Unknown'}</h6>
                 </div>
             )}
