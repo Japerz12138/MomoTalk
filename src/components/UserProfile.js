@@ -286,15 +286,15 @@ const UserProfile = ({ user, isOwnProfile, onSendMessage, onRemoveFriend, onAddF
                                 </button>
                             ) : (
                                 <>
-                                    <button className="btn custom-btn" onClick={onSendMessage}>
-                                        {t('profile.sendMessage')}
-                                    </button>
-                                    <button
-                                        className="btn btn-danger"
-                                        onClick={() => setShowRemoveFriendModal(true)}
-                                    >
-                                        {user.isSelf ? t('profile.clearChatHistory') : t('profile.removeFriend')}
-                                    </button>
+                            <button className="btn custom-btn" onClick={onSendMessage}>
+                                {t('profile.sendMessage')}
+                            </button>
+                            <button
+                                className="btn btn-danger"
+                                onClick={() => setShowRemoveFriendModal(true)}
+                            >
+                                {user.isSelf ? t('profile.clearChatHistory') : t('profile.removeFriend')}
+                            </button>
                                 </>
                             )}
                         </div>

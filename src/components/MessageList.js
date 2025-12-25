@@ -143,7 +143,25 @@ function MessageList({ messages, groups = [], onSelectMessage, onSelectGroup, un
                                 >
                                     {truncateNickname(group.name)}
                                 </strong>
-                                <small style={{ whiteSpace: 'nowrap' }}>{formatDate(group.lastMessageTime)}</small>
+                                <div className="d-flex align-items-center" style={{ gap: '8px', flexShrink: 0 }}>
+                                    {(unreadMessagesCount[`group_${group.id}`] || 0) > 0 && (
+                                        <span
+                                            className="badge bg-danger rounded-pill"
+                                            style={{
+                                                fontSize: '0.7rem',
+                                                minWidth: '18px',
+                                                height: '18px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: '0 6px'
+                                            }}
+                                        >
+                                            {unreadMessagesCount[`group_${group.id}`]}
+                                        </span>
+                                    )}
+                                    <small style={{ whiteSpace: 'nowrap' }}>{formatDate(group.lastMessageTime)}</small>
+                                </div>
                             </div>
                             <p className="mb-0 text-muted" style={{ 
                                 overflow: 'hidden', 

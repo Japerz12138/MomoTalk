@@ -77,6 +77,9 @@ function App() {
     const [unreadMessagesCount, setUnreadMessagesCount] = useState(
         JSON.parse(localStorage.getItem('unreadMessagesCount')) || {}
     );
+    const [lastReadMessageId, setLastReadMessageId] = useState(
+        JSON.parse(localStorage.getItem('lastReadMessageId')) || {}
+    );
     const [showNotificationModal, setShowNotificationModal] = useState(false);
     const [showEmojiPanel, setShowEmojiPanel] = useState(false);
     const [imageQueue, setImageQueue] = useState([]); // [{ id, preview, imageUrl, uploading }]
@@ -509,6 +512,19 @@ function App() {
                                 localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
                                 return updated;
                             });
+                            
+                            // Record first unread message ID (from bottom up, so this is the first unread)
+                            if (message.id) {
+                                setLastReadMessageId((prev) => {
+                                    // Only set if not already set (first unread message)
+                                    if (!prev[friendId]) {
+                                        const updated = { ...prev, [friendId]: message.id };
+                                        localStorage.setItem('lastReadMessageId', JSON.stringify(updated));
+                                        return updated;
+                                    }
+                                    return prev;
+                                });
+                            }
                         }
                     }
                 }
@@ -570,10 +586,13 @@ function App() {
             const currentSelectedGroup = selectedGroup;
 
             const isViewingThisGroup = currentActiveSection === 'chat' && currentSelectedGroup && currentSelectedGroup.id === message.groupId;
+            const isSelfMessage = message.senderId === userId;
+            const groupId = message.groupId;
+            const messageKey = `group_${groupId}_${message.id || message.clientId || Date.now()}`;
 
             const updatedMessage = {
                 ...message,
-                self: message.senderId === userId,
+                self: isSelfMessage,
                 avatar: message.avatar || DEFAULT_AVATAR,
                 momoCode: message.momoCode || null,
                 messageType: message.messageType || 'text',
@@ -622,6 +641,43 @@ function App() {
                     });
                     return sorted;
                 });
+            } else {
+                // Not viewing this group - increment unread count only for new regular messages (not system, not self)
+                if (message.messageType !== 'system' && !isSelfMessage) {
+                    // Check if we already processed this message
+                    if (!processedMessagesRef.current.has(messageKey)) {
+                        processedMessagesRef.current.add(messageKey);
+                        // Clean up old entries
+                        if (processedMessagesRef.current.size > 1000) {
+                            const entries = Array.from(processedMessagesRef.current);
+                            processedMessagesRef.current = new Set(entries.slice(-500));
+                        }
+                        
+                        setUnreadMessagesCount((prev) => {
+                            const groupKey = `group_${groupId}`;
+                            const updated = {
+                                ...prev,
+                                [groupKey]: (prev[groupKey] || 0) + 1,
+                            };
+                            localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
+                            return updated;
+                        });
+                        
+                        // Record first unread message ID (from bottom up, so this is the first unread)
+                        if (message.id) {
+                            setLastReadMessageId((prev) => {
+                                const groupKey = `group_${groupId}`;
+                                // Only set if not already set (first unread message)
+                                if (!prev[groupKey]) {
+                                    const updated = { ...prev, [groupKey]: message.id };
+                                    localStorage.setItem('lastReadMessageId', JSON.stringify(updated));
+                                    return updated;
+                                }
+                                return prev;
+                            });
+                        }
+                    }
+                }
             }
 
             // Always update groups list with last message (skip system messages)
@@ -1122,6 +1178,42 @@ function App() {
         }
     };
 
+    const handleUpdateLastRead = (messageId) => {
+        if (!selectedFriend && !selectedGroup) return;
+        
+        const chatKey = selectedGroup ? `group_${selectedGroup.id}` : (selectedFriend?.isSelf ? userId : selectedFriend?.id);
+        if (chatKey) {
+            setLastReadMessageId((prev) => {
+                const updated = { ...prev, [chatKey]: messageId };
+                localStorage.setItem('lastReadMessageId', JSON.stringify(updated));
+                return updated;
+            });
+            
+            // Clear unread count when user scrolls to bottom
+            setUnreadMessagesCount((prev) => {
+                const updated = { ...prev, [chatKey]: 0 };
+                localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
+                return updated;
+            });
+        }
+    };
+
+    const handleClearUnreadCount = () => {
+        if (!selectedFriend && !selectedGroup) return;
+        
+        const chatKey = selectedGroup ? `group_${selectedGroup.id}` : (selectedFriend?.isSelf ? userId : selectedFriend?.id);
+        if (chatKey) {
+            // Clear unread count when user clicks "jump to unread" button
+            // This makes the button disappear, but we don't update lastReadMessageId yet
+            // lastReadMessageId will be updated when user scrolls back to bottom
+            setUnreadMessagesCount((prev) => {
+                const updated = { ...prev, [chatKey]: 0 };
+                localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
+                return updated;
+            });
+        }
+    };
+
     const handleSelectGroup = async (group) => {
         if (!token || !group) return;
 
@@ -1136,6 +1228,9 @@ function App() {
         setIsLoadingMoreMessages(false);
         // Close group profile when selecting group for chat (not for viewing profile)
         // setSelectedGroupProfile(null); // Don't close here, as this is for chat, not profile view
+
+        // Don't clear unread count immediately - let it be cleared when user scrolls to bottom
+        // This allows the "jump to unread" button to show
 
         try {
             const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/groups/${group.id}/messages?limit=20`, {
@@ -1161,6 +1256,10 @@ function App() {
 
             setDms(sortedMessages);
             setHasMoreMessages(response.data.length === 20);
+            
+            // Don't update lastReadMessageId immediately when opening chat
+            // Only update when user actually scrolls to bottom (via handleUpdateLastRead)
+            // This allows the "jump to unread" button to show if there are unread messages
         } catch (error) {
             if (error.response?.status === 401) {
                 console.error('Unauthorized! Clearing token.');
@@ -1316,7 +1415,8 @@ function App() {
                 setDms(messagesWithAvatar);
                 setHasMoreMessages(response.data.length === 20);
                 
-                // Update self message state with last message from history
+                // Don't update lastReadMessageId immediately when opening chat
+                // Only update when user actually scrolls to bottom (via handleUpdateLastRead)
                 if (messagesWithAvatar.length > 0) {
                     const lastMessage = messagesWithAvatar[messagesWithAvatar.length - 1];
                     setSelfLastMessage(lastMessage.text || (lastMessage.imageUrl ? '[Image]' : ''));
@@ -1340,11 +1440,8 @@ function App() {
         setSelectedFriend(friend);
         setSelectedGroup(null);
 
-        setUnreadMessagesCount((prev) => {
-            const updated = { ...prev, [friend.id]: 0 };
-            localStorage.setItem('unreadMessagesCount', JSON.stringify(updated));
-            return updated;
-        });
+        // Don't clear unread count immediately - let it be cleared when user scrolls to bottom
+        // This allows the "jump to unread" button to show
 
         try {
             const response = await axios.get(`${process.env.REACT_APP_SERVER_DOMAIN}/dm/${friend.id}?limit=20`, {
@@ -1364,6 +1461,10 @@ function App() {
 
             setDms(messagesWithAvatar);
             setHasMoreMessages(response.data.length === 20);
+            
+            // Don't update lastReadMessageId immediately when opening chat
+            // Only update when user actually scrolls to bottom (via handleUpdateLastRead)
+            // This allows the "jump to unread" button to show if there are unread messages
         } catch (error) {
             if (error.response?.status === 401) {
                 console.error('Unauthorized! Clearing token.');
@@ -2373,6 +2474,7 @@ function App() {
                                             avatar={avatar}
                                             showMultiDevice={showMultiDevice}
                                             isMobile={true}
+                                            unreadMessagesCount={unreadMessagesCount}
                                         />
                                     </div>
                                 )}
@@ -2551,6 +2653,10 @@ function App() {
                                         onCancelReply={() => setReplyTo(null)}
                                         onReply={(message) => setReplyTo(message)}
                                         onDeleteMessage={handleDeleteMessage}
+                                        lastReadMessageId={lastReadMessageId}
+                                        unreadMessagesCount={unreadMessagesCount}
+                                        onUpdateLastRead={handleUpdateLastRead}
+                                        onClearUnreadCount={handleClearUnreadCount}
                                         onAvatarClick={handleAvatarClick}
                                     />
                                 </div>
@@ -2631,6 +2737,7 @@ function App() {
                                         nickname={nickname}
                                         avatar={avatar}
                                         showMultiDevice={showMultiDevice}
+                                        unreadMessagesCount={unreadMessagesCount}
                                     />
                                 )}
 
@@ -2682,6 +2789,10 @@ function App() {
                                             onLoadMoreMessages={handleLoadMoreMessages}
                                             hasMoreMessages={hasMoreMessages}
                                             isLoadingMoreMessages={isLoadingMoreMessages}
+                                            lastReadMessageId={lastReadMessageId}
+                                            unreadMessagesCount={unreadMessagesCount}
+                                            onUpdateLastRead={handleUpdateLastRead}
+                                            onClearUnreadCount={handleClearUnreadCount}
                                         />
                                         <MessageInput
                                             input={input}

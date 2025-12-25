@@ -5,7 +5,7 @@ import MessageInput from './MessageInput';
 import { getFullImageUrl } from '../utils/imageHelper';
 import { useTranslation } from 'react-i18next';
 
-const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue, onReply, onDeleteMessage, replyTo, onCancelReply, onAvatarClick, onLoadMoreMessages, hasMoreMessages, isLoadingMoreMessages }) => {
+const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input, onInputChange, onSendMessage, onToggleEmojiPanel, imageQueue, onAddImageToQueue, onRemoveImageFromQueue, onReply, onDeleteMessage, replyTo, onCancelReply, onAvatarClick, onLoadMoreMessages, hasMoreMessages, isLoadingMoreMessages, lastReadMessageId = {}, unreadMessagesCount = {}, onUpdateLastRead, onClearUnreadCount }) => {
     const chatEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const { t } = useTranslation();
@@ -46,6 +46,119 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
         }
     };
 
+    // Scroll to first unread message (from bottom up)
+    // The first unread message is the one right after the lastReadMessageId
+    const scrollToUnread = () => {
+        const container = chatContainerRef.current;
+        if (!container || !friend || messages.length === 0) return;
+
+        // Get the chat key (friend ID or group_${groupId})
+        const chatKey = friend.isGroup ? `group_${friend.id}` : friend.id;
+        const lastReadId = lastReadMessageId[chatKey];
+        
+        if (!lastReadId) {
+            // No last read position, scroll to bottom
+            scrollToBottom();
+            return;
+        }
+
+        // Find the index of the last read message
+        const lastReadIndex = messages.findIndex(msg => msg.id === lastReadId);
+        
+        if (lastReadIndex >= 0 && lastReadIndex < messages.length - 1) {
+            // Found the last read message, get the next message (first unread)
+            const firstUnreadMessage = messages[lastReadIndex + 1];
+            if (firstUnreadMessage && firstUnreadMessage.id) {
+                // Find the message element with the first unread message ID
+                const messageElement = container.querySelector(`[data-message-id="${firstUnreadMessage.id}"]`);
+                
+                if (messageElement) {
+                    // Scroll to the first unread message
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            if (container && messageElement) {
+                                // Scroll to show the unread message with some offset from top
+                                const containerRect = container.getBoundingClientRect();
+                                const elementRect = messageElement.getBoundingClientRect();
+                                const scrollTop = container.scrollTop + (elementRect.top - containerRect.top) - 100; // 100px offset from top
+                                container.scrollTop = Math.max(0, scrollTop);
+                                
+                                // Clear unread count so button disappears
+                                // We'll update lastReadMessageId when user scrolls back to bottom
+                                if (onClearUnreadCount) {
+                                    onClearUnreadCount();
+                                }
+                            }
+                        });
+                    });
+                    return;
+                }
+            }
+        }
+        
+        // If we can't find the message in current view, try to scroll to the last read message
+        // and then scroll a bit more to show the unread area
+        const lastReadElement = container.querySelector(`[data-message-id="${lastReadId}"]`);
+        if (lastReadElement) {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (container && lastReadElement) {
+                        const containerRect = container.getBoundingClientRect();
+                        const elementRect = lastReadElement.getBoundingClientRect();
+                        // Scroll to show the last read message, then scroll a bit more to show unread messages
+                        const scrollTop = container.scrollTop + (elementRect.top - containerRect.top) - 150; // 150px offset to show unread area
+                        container.scrollTop = Math.max(0, scrollTop);
+                    }
+                });
+            });
+        } else {
+            // Fallback: scroll to bottom
+            scrollToBottom();
+        }
+    };
+
+    // Calculate unread count for current chat
+    const getUnreadCount = () => {
+        if (!friend) return 0;
+        const chatKey = friend.isGroup ? `group_${friend.id}` : friend.id;
+        return unreadMessagesCount[chatKey] || 0;
+    };
+
+    // Check if there are unread messages
+    // This checks both unreadMessagesCount and lastReadMessageId to determine if there are unread messages
+    const hasUnreadMessages = () => {
+        if (!friend || messages.length === 0) return false;
+        const chatKey = friend.isGroup ? `group_${friend.id}` : friend.id;
+        
+        // Check unread count first - if it's 0, don't show button (user clicked it)
+        const unreadCount = unreadMessagesCount[chatKey] || 0;
+        if (unreadCount > 0) return true;
+        
+        // If unread count is 0, don't show button even if there are messages after lastReadMessageId
+        // This is because user clicked the button and we cleared the count
+        // The lastReadMessageId will be updated when user scrolls back to bottom
+        return false;
+    };
+
+    // Check if a message is the first unread message
+    const isFirstUnreadMessage = (message, index) => {
+        if (!friend || !message || !message.id) return false;
+        const chatKey = friend.isGroup ? `group_${friend.id}` : friend.id;
+        const lastReadId = lastReadMessageId[chatKey];
+        
+        if (!lastReadId) return false;
+        
+        // Find the index of the last read message
+        const lastReadIndex = messages.findIndex(msg => msg.id === lastReadId);
+        
+        // This message is the first unread if it's the one right after lastReadMessageId
+        if (lastReadIndex >= 0 && index === lastReadIndex + 1) {
+            return true;
+        }
+        
+        return false;
+    };
+
     // Use useLayoutEffect to scroll before browser paint, preventing flash
     // Only scroll to bottom when chat changes, not when loading more messages
     useLayoutEffect(() => {
@@ -56,7 +169,8 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
         const friendChanged = prevFriendIdRef.current !== currentFriendId;
         prevFriendIdRef.current = currentFriendId;
 
-        // Only scroll to bottom when switching to a new chat
+        // Always scroll to bottom when switching to a new chat
+        // The button will show if there are unread messages, but we still start at bottom
         if (friendChanged) {
             // Reset all scroll-related tracking when friend changes
             lastScrollHeightRef.current = 0;
@@ -145,10 +259,12 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             return;
         }
 
-        //scroll to bottom
+        //scroll to bottom on initial load (always, regardless of unread status)
         const isInitialLoad = prevMessagesLengthRef.current === 0 && messages.length > 0;
         
         if (isInitialLoad) {
+            // Always scroll to bottom on initial load, even if there are unread messages
+            // The button will show if there are unread messages
             isInitialLoadRef.current = true; //Mark as initial load so images will trigger scroll
             prevMessagesLengthRef.current = messages.length;
             oldestMessageIdRef.current = currentOldestMessageId;
@@ -205,9 +321,105 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
     }, [messages]);
 
     // Handle scroll to load more messages
+    const updateLastReadTimeoutRef = useRef(null);
+    const clearUnreadTimeoutRef = useRef(null);
+    
     const handleScroll = () => {
         const container = chatContainerRef.current;
-        if (!container || !onLoadMoreMessages || !hasMoreMessages || isLoadingMoreMessages) return;
+        if (!container) return;
+        
+        // Check if user has scrolled to or past the first unread message
+        // If so, clear unread count to hide the button
+        if (friend && messages.length > 0 && onClearUnreadCount) {
+            const chatKey = friend.isGroup ? `group_${friend.id}` : friend.id;
+            const unreadCount = unreadMessagesCount[chatKey] || 0;
+            
+            if (unreadCount > 0) {
+                const lastReadId = lastReadMessageId[chatKey];
+                if (lastReadId) {
+                    const lastReadIndex = messages.findIndex(msg => msg.id === lastReadId);
+                    if (lastReadIndex >= 0 && lastReadIndex < messages.length - 1) {
+                        // Find the first unread message element
+                        const firstUnreadMessage = messages[lastReadIndex + 1];
+                        if (firstUnreadMessage && firstUnreadMessage.id) {
+                            const firstUnreadElement = container.querySelector(`[data-message-id="${firstUnreadMessage.id}"]`);
+                            if (firstUnreadElement) {
+                                const containerRect = container.getBoundingClientRect();
+                                const elementRect = firstUnreadElement.getBoundingClientRect();
+                                // Check if the first unread message is visible or above the viewport
+                                const isFirstUnreadVisible = elementRect.top >= containerRect.top && elementRect.bottom <= containerRect.bottom;
+                                const isFirstUnreadAbove = elementRect.bottom < containerRect.top;
+                                
+                                if (isFirstUnreadVisible || isFirstUnreadAbove) {
+                                    // User has scrolled to or past the first unread message
+                                    // Clear unread count after a short delay to avoid flickering
+                                    if (clearUnreadTimeoutRef.current) {
+                                        clearTimeout(clearUnreadTimeoutRef.current);
+                                    }
+                                    clearUnreadTimeoutRef.current = setTimeout(() => {
+                                        // Double-check the element is still visible or above
+                                        const container = chatContainerRef.current;
+                                        if (container && firstUnreadElement) {
+                                            const containerRect = container.getBoundingClientRect();
+                                            const elementRect = firstUnreadElement.getBoundingClientRect();
+                                            const isStillVisible = elementRect.top >= containerRect.top && elementRect.bottom <= containerRect.bottom;
+                                            const isStillAbove = elementRect.bottom < containerRect.top;
+                                            
+                                            if (isStillVisible || isStillAbove) {
+                                                onClearUnreadCount();
+                                            }
+                                        }
+                                    }, 300);
+                                } else {
+                                    // Clear timeout if user scrolls back down
+                                    if (clearUnreadTimeoutRef.current) {
+                                        clearTimeout(clearUnreadTimeoutRef.current);
+                                        clearUnreadTimeoutRef.current = null;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check if scrolled to bottom (within 50px)
+        const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        const isAtBottom = scrollBottom < 50;
+        
+        // Update last read position if scrolled to bottom and not loading more messages
+        // Only update if user has been at bottom for a bit (to avoid flickering)
+        // AND only if this is not an initial load (to prevent auto-scroll from clearing unread status)
+        if (isAtBottom && !isLoadingRef.current && !isLoadingMoreMessages && !isInitialLoadRef.current && 
+            messages.length > 0 && onUpdateLastRead && friend) {
+            const lastMessage = messages[messages.length - 1];
+            if (lastMessage && lastMessage.id) {
+                // Debounce the update to avoid excessive calls and flickering
+                if (updateLastReadTimeoutRef.current) {
+                    clearTimeout(updateLastReadTimeoutRef.current);
+                }
+                updateLastReadTimeoutRef.current = setTimeout(() => {
+                    // Double-check we're still at bottom before updating
+                    const container = chatContainerRef.current;
+                    if (container) {
+                        const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+                        if (scrollBottom < 100) { // Still near bottom
+                            onUpdateLastRead(lastMessage.id);
+                        }
+                    }
+                }, 500); // Increased delay to prevent flickering
+            }
+        } else {
+            // Clear timeout if user scrolls away from bottom or during initial load
+            if (updateLastReadTimeoutRef.current) {
+                clearTimeout(updateLastReadTimeoutRef.current);
+                updateLastReadTimeoutRef.current = null;
+            }
+        }
+        
+        // Load more messages when scrolling to top
+        if (!onLoadMoreMessages || !hasMoreMessages || isLoadingMoreMessages) return;
         if (isLoadingRef.current) return;
 
         if (container.scrollTop < 100 && messages.length > 0) {
@@ -279,6 +491,12 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             }
             if (loadingTimeoutRef.current) {
                 clearTimeout(loadingTimeoutRef.current);
+            }
+            if (updateLastReadTimeoutRef.current) {
+                clearTimeout(updateLastReadTimeoutRef.current);
+            }
+            if (clearUnreadTimeoutRef.current) {
+                clearTimeout(clearUnreadTimeoutRef.current);
             }
         };
     }, []);
@@ -510,6 +728,53 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
             {!isMobile && (
                 <h5 className="text-center text-muted mb-3">{t('chat.chatWith', { currentChat: currentChat || t('chat.selectAConversation') })}</h5>
             )}
+            {/* Jump to unread button */}
+            {hasUnreadMessages() && (
+                <div style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    padding: '10px',
+                    pointerEvents: 'none' // Allow clicks to pass through container
+                }}>
+                    <button
+                        onClick={scrollToUnread}
+                        className="btn btn-primary btn-sm"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            borderRadius: '20px',
+                            padding: '6px 16px',
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            backgroundColor: 'rgba(76, 91, 111, 0.9)',
+                            border: 'none',
+                            color: 'white',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1)',
+                            backdropFilter: 'blur(10px)',
+                            pointerEvents: 'auto', // Enable clicks on button
+                            transition: 'all 0.2s ease',
+                            cursor: 'pointer'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(76, 91, 111, 1)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(76, 91, 111, 0.9)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1)';
+                        }}
+                    >
+                        <i className="bi bi-arrow-down-circle"></i>
+                        <span>{t('chat.jumpToUnread', { count: getUnreadCount() }) || `跳转到未读 (${getUnreadCount()})`}</span>
+                    </button>
+                </div>
+            )}
             {/* Loading indicator for older messages */}
             {isLoadingMoreMessages && (
                 <div style={{ 
@@ -540,9 +805,46 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                 messages.map((message, index) => {
                     const previousMessage = index > 0 ? messages[index - 1] : null;
                     const showSeparator = shouldShowDateSeparator(message, previousMessage);
+                    const isFirstUnread = isFirstUnreadMessage(message, index);
                     
                     return (
                         <React.Fragment key={message.id || `msg-${index}`}>
+                            {/* Red divider for first unread message */}
+                            {isFirstUnread && (
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    margin: '15px 0',
+                                    position: 'relative'
+                                }}>
+                                    <div style={{
+                                        flex: 1,
+                                        height: '2px',
+                                        backgroundColor: 'rgba(255, 107, 157, 0.6)',
+                                        borderRadius: '1px'
+                                    }}></div>
+                                    <span style={{
+                                        padding: '4px 12px',
+                                        backgroundColor: 'rgba(255, 107, 157, 0.9)',
+                                        borderRadius: '12px',
+                                        color: 'white',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 500,
+                                        whiteSpace: 'nowrap',
+                                        margin: '0 12px',
+                                        boxShadow: '0 2px 4px rgba(255, 107, 157, 0.3)'
+                                    }}>
+                                        {t('chat.unreadFromHere') || '到此未读'}
+                                    </span>
+                                    <div style={{
+                                        flex: 1,
+                                        height: '2px',
+                                        backgroundColor: 'rgba(255, 107, 157, 0.6)',
+                                        borderRadius: '1px'
+                                    }}></div>
+                                </div>
+                            )}
                             {showSeparator && (
                                 <div style={{ 
                                     display: 'flex', 
@@ -593,6 +895,7 @@ const ChatContainer = ({ messages, currentChat, friend, onBack, isMobile, input,
                             ) : (
                                 <div
                                     className="message-wrapper mb-3"
+                                    data-message-id={message.id}
                                     onMouseEnter={() => setHoveredMessageIndex(index)}
                                     onMouseLeave={() => setHoveredMessageIndex(null)}
                                     onContextMenu={(e) => handleContextMenu(e, message)}

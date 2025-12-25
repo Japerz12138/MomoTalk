@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR } from '../constants';
 import { getFullImageUrl } from '../utils/imageHelper';
 
-const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onShowGroupProfile, onCreateGroup, onJoinGroup, userId, nickname, avatar, showMultiDevice = true, isMobile = false }) => {
+const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onShowGroupProfile, onCreateGroup, onJoinGroup, userId, nickname, avatar, showMultiDevice = true, isMobile = false, unreadMessagesCount = {} }) => {
     const { t } = useTranslation();
     const [selectedFriendId, setSelectedFriendId] = useState(null);
     const [selectedGroupId, setSelectedGroupId] = useState(null);
@@ -269,11 +269,35 @@ const FriendList = ({ friends, groups = [], onSelectFriend, onSelectGroup, onSho
                         </div>
                         <div className="flex-grow-1 text-start" style={{ overflow: 'hidden', minWidth: 0 }}>
                             <div style={{ 
-                                overflow: 'hidden', 
-                                textOverflow: 'ellipsis', 
-                                whiteSpace: 'nowrap' 
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                overflow: 'hidden'
                             }}>
-                                <strong>{group.name}</strong>
+                                <strong style={{ 
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis', 
+                                    whiteSpace: 'nowrap',
+                                    flex: '1 1 auto',
+                                    minWidth: 0
+                                }}>{group.name}</strong>
+                                {(unreadMessagesCount[`group_${group.id}`] || 0) > 0 && (
+                                    <span
+                                        className="badge bg-danger rounded-pill"
+                                        style={{
+                                            fontSize: '0.7rem',
+                                            minWidth: '18px',
+                                            height: '18px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '0 6px',
+                                            flexShrink: 0
+                                        }}
+                                    >
+                                        {unreadMessagesCount[`group_${group.id}`]}
+                                    </span>
+                                )}
                             </div>
                             {group.lastMessage && (
                                 <div style={{ 

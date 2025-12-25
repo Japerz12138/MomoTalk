@@ -30,14 +30,16 @@
     "newMessage": "New message",
     "newMessageFrom": "New message from "
   },
-  "chat": {
-    "noMessagesYet": "No messages yet.",
-    "maybeStartWithAHi": "Maybe start with a \"Hi\"?",
-    "chatWith": "Chat with {{currentChat}}",
-    "startAConversation": "Start a conversation with {{currentChat}}",
-    "reply": "Reply",
-    "withdraw": "Recall"
-  },
+    "chat": {
+        "noMessagesYet": "No messages yet.",
+        "maybeStartWithAHi": "Maybe start with a \"Hi\"?",
+        "chatWith": "Chat with {{currentChat}}",
+        "startAConversation": "Start a conversation with {{currentChat}}",
+        "reply": "Reply",
+        "withdraw": "Recall",
+        "jumpToUnread": "Jump to unread ({{count}})",
+        "unreadFromHere": "Unread from here"
+    },
   "messageInput": {
     "uploadImage": "Upload Image",
     "emoji": "Emoji",
@@ -67,7 +69,7 @@
     "enableNotificationsCheckSettings": "Enable Notifications (Check Settings)",
     "notificationsDenied": "Notifications are denied. Please enable them in your browser settings.",
     "about": "About",
-    "version": "Version: 1.2.3",
+    "version": "Version: 1.2.4",
     "welcome": "Welcome to MomoTalk! This is NYIT CSCI 621 - Programming Languages Final Project!",
     "professor": "Professor: Khalid Mirza",
     "github": "Github: Japerz12138",

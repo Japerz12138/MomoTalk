@@ -321,7 +321,7 @@ const SettingsPage = ({ onUpdatePassword, isDarkMode, isAutoMode, onToggleDarkMo
                     <p>{t('settings.welcome')}</p>
                     <p>{t('settings.professor')}</p>
                     <p>{t('settings.github')}</p>
-                    <a href="https://github.com/Japerz12138/momotalk_v2">https://github.com/Japerz12138/momotalk_v2</a>
+                    <a href="https://github.com/Japerz12138/momotalk">https://github.com/Japerz12138/momotalk</a>
                 </div>
             </div>
 
